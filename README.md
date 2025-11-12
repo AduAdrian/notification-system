@@ -93,20 +93,56 @@ npm run dev
 
 ## 📚 Documentation
 
-- **[API Documentation](./docs/API.md)** - Complete API reference
+### API Documentation
+
+- **[Complete API Reference](./docs/API_REFERENCE.md)** - Full API guide with examples
+- **Interactive Swagger UI**:
+  - Notification Service: `http://localhost:3000/api-docs`
+  - In-App Service: `http://localhost:3005/api-docs`
+- **OpenAPI Specifications**:
+  - [Notification Service](./services/notification-service/openapi.yaml)
+  - [In-App Service](./services/inapp-service/openapi.yaml)
+
+### Deployment & Architecture
+
 - **[Cloud Deployment](./docs/CLOUD_DEPLOYMENT.md)** - Free cloud setup
 - **[Local Deployment](./docs/DEPLOYMENT.md)** - Docker & local setup
 - **[Architecture](./notification_system_architecture.md)** - System design
 - **[Worktree Workflow](./WORKTREE_WORKFLOW.md)** - Git workflow
 
+### Testing & Performance
+
+- **[Testing Guide](./TESTING.md)** - Testing strategy
+- **[Performance Optimizations](./PERFORMANCE_OPTIMIZATIONS_SUMMARY.md)** - Performance guide
+
 ---
 
-## 🌐 Live Demo
+## 🌐 Live Demo & API Access
 
 After deployment:
 - **API**: `https://notification-api.onrender.com`
-- **Health**: `https://notification-api.onrender.com/health`
-- **SSE**: `https://inapp-service.onrender.com/events/:userId`
+- **API Documentation**: `https://notification-api.onrender.com/api-docs`
+- **Health Check**: `https://notification-api.onrender.com/health`
+- **SSE Streaming**: `https://inapp-service.onrender.com/events/:userId`
+- **OpenAPI Spec**: `https://notification-api.onrender.com/api-docs.json`
+
+### Quick API Example
+
+```bash
+# Create a notification
+curl -X POST https://notification-api.onrender.com/api/v1/notifications \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user123",
+    "channels": ["email", "sms"],
+    "priority": "high",
+    "subject": "Welcome!",
+    "message": "Thanks for signing up"
+  }'
+```
+
+See [API Reference](./docs/API_REFERENCE.md) for complete documentation.
 
 ## License
 

@@ -1,0 +1,78 @@
+openapi: 3.1.0
+info:
+  title: Email Service API (Internal)
+  version: 1.0.0
+  description: |
+    Internal microservice for email delivery. Not exposed to external clients.
+
+    ## Features
+    - SMTP email delivery
+    - HTML and plain text support
+    - Attachment handling
+    - Template rendering
+    - Delivery tracking
+
+servers:
+  - url: http://email-service:3001
+    description: Internal service (Docker)
+  - url: http://localhost:3001
+    description: Local development
+
+tags:
+  - name: Health
+    description: Health check and monitoring
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Returns service health status
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is unhealthy
+
+  /metrics:
+    get:
+      tags:
+        - Health
+      summary: Prometheus metrics
+      operationId: getMetrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        service:
+          type: string
+          example: "email-service"
+        timestamp:
+          type: string
+          format: date-time
+        checks:
+          type: object
+          properties:
+            smtp:
+              type: string
+              enum: [up, down]

@@ -1,0 +1,876 @@
+openapi: 3.1.0
+info:
+  title: Notification Service API
+  version: 1.0.0
+  description: |
+    Scalable microservices-based notification system that supports multiple delivery channels (Email, SMS, Push, In-App).
+
+    ## Features
+    - Multi-channel notification delivery
+    - Priority-based routing
+    - Real-time status tracking
+    - Rate limiting and throttling
+    - JWT-based authentication
+
+  contact:
+    name: API Support
+    email: support@notification-system.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://staging.notification-system.com
+    description: Staging server
+  - url: https://api.notification-system.com
+    description: Production server
+
+tags:
+  - name: Notifications
+    description: Notification management endpoints
+  - name: Health
+    description: Service health and monitoring endpoints
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  /api/v1/notifications:
+    post:
+      tags:
+        - Notifications
+      summary: Create a new notification
+      description: |
+        Creates a new notification for delivery across one or more channels.
+        The notification will be queued and processed asynchronously.
+      operationId: createNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+            examples:
+              email-notification:
+                summary: Email notification
+                value:
+                  userId: "user123"
+                  channels: ["email"]
+                  priority: "high"
+                  subject: "Welcome to our platform!"
+                  message: "Thank you for signing up. Let's get started!"
+                  metadata:
+                    templateId: "welcome-email"
+                    tags: ["onboarding", "welcome"]
+              multi-channel:
+                summary: Multi-channel notification
+                value:
+                  userId: "user456"
+                  channels: ["email", "sms", "push", "in_app"]
+                  priority: "urgent"
+                  subject: "Security Alert"
+                  message: "We detected a login from a new device"
+                  metadata:
+                    customData:
+                      deviceName: "iPhone 15"
+                      location: "New York, US"
+              scheduled-notification:
+                summary: Scheduled notification
+                value:
+                  userId: "user789"
+                  channels: ["email"]
+                  priority: "medium"
+                  subject: "Reminder: Upcoming appointment"
+                  message: "Your appointment is scheduled for tomorrow at 3 PM"
+                  metadata:
+                    scheduledAt: "2025-11-14T15:00:00Z"
+                    expiresAt: "2025-11-15T15:00:00Z"
+      responses:
+        '201':
+          description: Notification created successfully
+          headers:
+            X-Request-ID:
+              description: Unique request identifier
+              schema:
+                type: string
+                format: uuid
+            X-RateLimit-Limit:
+              description: Rate limit ceiling for this endpoint
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              description: Number of requests remaining in the current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Time when the rate limit window resets (Unix timestamp)
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+              example:
+                success: true
+                data:
+                  id: "notif_1234567890abcdef"
+                  status: "pending"
+                  createdAt: "2025-11-13T10:30:00Z"
+                metadata:
+                  requestId: "req_abcdef123456"
+                  timestamp: "2025-11-13T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/notifications/{id}:
+    get:
+      tags:
+        - Notifications
+      summary: Get notification by ID
+      description: Retrieves detailed information about a specific notification
+      operationId: getNotification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Notification ID
+          schema:
+            type: string
+            pattern: '^notif_[a-zA-Z0-9]+$'
+          example: "notif_1234567890abcdef"
+      responses:
+        '200':
+          description: Notification found
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Notification'
+              example:
+                success: true
+                data:
+                  id: "notif_1234567890abcdef"
+                  userId: "user123"
+                  channels: ["email", "sms"]
+                  priority: "high"
+                  status: "sent"
+                  subject: "Welcome to our platform!"
+                  message: "Thank you for signing up"
+                  metadata:
+                    templateId: "welcome-email"
+                    tags: ["onboarding"]
+                  createdAt: "2025-11-13T10:30:00Z"
+                  updatedAt: "2025-11-13T10:30:15Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      tags:
+        - Notifications
+      summary: Update notification status
+      description: Updates the status of an existing notification
+      operationId: updateNotificationStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Notification ID
+          schema:
+            type: string
+          example: "notif_1234567890abcdef"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  $ref: '#/components/schemas/NotificationStatus'
+            example:
+              status: "delivered"
+      responses:
+        '200':
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          status:
+                            $ref: '#/components/schemas/NotificationStatus'
+              example:
+                success: true
+                data:
+                  id: "notif_1234567890abcdef"
+                  status: "delivered"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/notifications/user/{userId}:
+    get:
+      tags:
+        - Notifications
+      summary: Get user notifications
+      description: Retrieves a paginated list of notifications for a specific user
+      operationId: getUserNotifications
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+          example: "user123"
+        - name: limit
+          in: query
+          description: Maximum number of notifications to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          example: 20
+        - name: offset
+          in: query
+          description: Number of notifications to skip (for pagination)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+        - name: status
+          in: query
+          description: Filter by notification status
+          schema:
+            $ref: '#/components/schemas/NotificationStatus'
+        - name: channel
+          in: query
+          description: Filter by channel
+          schema:
+            $ref: '#/components/schemas/NotificationChannel'
+      responses:
+        '200':
+          description: List of user notifications
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Notification'
+                      metadata:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          limit:
+                            type: integer
+                          offset:
+                            type: integer
+              example:
+                success: true
+                data:
+                  - id: "notif_001"
+                    userId: "user123"
+                    channels: ["email"]
+                    priority: "high"
+                    status: "delivered"
+                    subject: "Welcome!"
+                    message: "Thanks for signing up"
+                    createdAt: "2025-11-13T10:30:00Z"
+                    updatedAt: "2025-11-13T10:30:15Z"
+                  - id: "notif_002"
+                    userId: "user123"
+                    channels: ["sms", "push"]
+                    priority: "medium"
+                    status: "sent"
+                    message: "Your order has shipped"
+                    createdAt: "2025-11-12T15:20:00Z"
+                    updatedAt: "2025-11-12T15:20:10Z"
+                metadata:
+                  total: 2
+                  limit: 50
+                  offset: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      description: Returns the health status of the service and its dependencies
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, unhealthy]
+                  service:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        enum: [up, down]
+                      redis:
+                        type: string
+                        enum: [up, down]
+                      kafka:
+                        type: string
+                        enum: [up, down]
+                  uptime:
+                    type: number
+                    description: Service uptime in seconds
+                  memory:
+                    type: object
+                    properties:
+                      rss:
+                        type: number
+                      heapTotal:
+                        type: number
+                      heapUsed:
+                        type: number
+                      external:
+                        type: number
+              example:
+                status: "healthy"
+                service: "notification-service"
+                timestamp: "2025-11-13T10:30:00Z"
+                checks:
+                  database: "up"
+                  redis: "up"
+                  kafka: "up"
+                uptime: 3600
+                memory:
+                  rss: 52428800
+                  heapTotal: 20971520
+                  heapUsed: 15728640
+                  external: 1048576
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  service:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  error:
+                    type: string
+
+  /ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness check
+      description: Kubernetes readiness probe endpoint
+      operationId: readinessCheck
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ready]
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [not ready]
+
+  /live:
+    get:
+      tags:
+        - Health
+      summary: Liveness check
+      description: Kubernetes liveness probe endpoint
+      operationId: livenessCheck
+      security: []
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [alive]
+
+  /metrics:
+    get:
+      tags:
+        - Health
+      summary: Prometheus metrics
+      description: Exposes Prometheus-compatible metrics
+      operationId: getMetrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP http_requests_total Total number of HTTP requests
+                # TYPE http_requests_total counter
+                http_requests_total{method="POST",route="/api/v1/notifications",status="201"} 1234
+
+                # HELP http_request_duration_seconds HTTP request duration in seconds
+                # TYPE http_request_duration_seconds histogram
+                http_request_duration_seconds_bucket{le="0.1"} 890
+                http_request_duration_seconds_bucket{le="0.5"} 1200
+                http_request_duration_seconds_sum 456.78
+                http_request_duration_seconds_count 1234
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from authentication service
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for service-to-service authentication
+
+  schemas:
+    NotificationChannel:
+      type: string
+      enum: [email, sms, push, in_app]
+      description: Delivery channel for the notification
+      example: email
+
+    NotificationPriority:
+      type: string
+      enum: [low, medium, high, urgent]
+      description: Priority level affects delivery speed and retry logic
+      default: medium
+      example: high
+
+    NotificationStatus:
+      type: string
+      enum: [pending, queued, sent, delivered, failed, bounced]
+      description: Current status of the notification
+      example: delivered
+
+    NotificationMetadata:
+      type: object
+      properties:
+        templateId:
+          type: string
+          description: Template ID for rendering notification content
+          example: "welcome-email"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags for categorization and filtering
+          example: ["onboarding", "welcome"]
+        customData:
+          type: object
+          additionalProperties: true
+          description: Custom data specific to your use case
+          example:
+            userId: "12345"
+            action: "signup"
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Schedule notification for future delivery
+          example: "2025-11-14T15:00:00Z"
+        expiresAt:
+          type: string
+          format: date-time
+          description: Time after which notification should not be delivered
+          example: "2025-11-15T15:00:00Z"
+
+    NotificationRequest:
+      type: object
+      required:
+        - userId
+        - channels
+        - message
+      properties:
+        userId:
+          type: string
+          description: Unique identifier for the user
+          example: "user123"
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationChannel'
+          minItems: 1
+          description: One or more channels to deliver the notification
+          example: ["email", "sms"]
+        priority:
+          $ref: '#/components/schemas/NotificationPriority'
+        subject:
+          type: string
+          maxLength: 200
+          description: Subject line (required for email channel)
+          example: "Welcome to our platform!"
+        message:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          description: Notification message content
+          example: "Thank you for signing up. Let's get started!"
+        metadata:
+          $ref: '#/components/schemas/NotificationMetadata'
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique notification identifier
+          example: "notif_1234567890abcdef"
+        userId:
+          type: string
+          example: "user123"
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationChannel'
+        priority:
+          $ref: '#/components/schemas/NotificationPriority'
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        subject:
+          type: string
+          nullable: true
+          example: "Welcome to our platform!"
+        message:
+          type: string
+          example: "Thank you for signing up"
+        metadata:
+          $ref: '#/components/schemas/NotificationMetadata'
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-11-13T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-11-13T10:30:15Z"
+
+    NotificationResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                id:
+                  type: string
+                  example: "notif_1234567890abcdef"
+                status:
+                  $ref: '#/components/schemas/NotificationStatus'
+                createdAt:
+                  type: string
+                  format: date-time
+
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the request was successful
+        data:
+          description: Response payload (structure varies by endpoint)
+        error:
+          $ref: '#/components/schemas/ApiError'
+        metadata:
+          type: object
+          properties:
+            requestId:
+              type: string
+              format: uuid
+              description: Unique request identifier for tracing
+            timestamp:
+              type: string
+              format: date-time
+              description: Server timestamp
+
+    ApiError:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid request parameters"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+          description: Detailed validation errors
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "VALIDATION_ERROR"
+                      message:
+                        type: string
+                        example: "Invalid request parameters"
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            field:
+                              type: string
+                            message:
+                              type: string
+          example:
+            success: false
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid request parameters"
+              details:
+                - field: "channels"
+                  message: "At least one channel is required"
+                - field: "message"
+                  message: "Message cannot be empty"
+
+    Unauthorized:
+      description: Authentication required or invalid credentials
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "UNAUTHORIZED"
+                      message:
+                        type: string
+                        example: "Invalid or missing authentication token"
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Invalid or missing authentication token"
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "FORBIDDEN"
+                      message:
+                        type: string
+                        example: "Insufficient permissions to access this resource"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "NOT_FOUND"
+                      message:
+                        type: string
+                        example: "Resource not found"
+          example:
+            success: false
+            error:
+              code: "NOT_FOUND"
+              message: "Notification not found"
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          description: Rate limit ceiling
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Requests remaining
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: Reset time (Unix timestamp)
+          schema:
+            type: integer
+        Retry-After:
+          description: Seconds until rate limit resets
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "RATE_LIMIT_EXCEEDED"
+                      message:
+                        type: string
+                        example: "Too many requests, please try again later"
+          example:
+            success: false
+            error:
+              code: "RATE_LIMIT_EXCEEDED"
+              message: "Rate limit exceeded. Please retry after 60 seconds"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "INTERNAL_ERROR"
+                      message:
+                        type: string
+                        example: "An unexpected error occurred"
+          example:
+            success: false
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred. Please try again later"

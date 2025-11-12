@@ -1,0 +1,62 @@
+openapi: 3.1.0
+info:
+  title: Push Notification Service API (Internal)
+  version: 1.0.0
+  description: |
+    Internal microservice for push notification delivery via FCM/APNs. Not exposed externally.
+
+servers:
+  - url: http://push-service:3003
+    description: Internal service (Docker)
+  - url: http://localhost:3003
+    description: Local development
+
+tags:
+  - name: Health
+    description: Health check and monitoring
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      tags:
+        - Health
+      summary: Prometheus metrics
+      operationId: getMetrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        service:
+          type: string
+          example: "push-service"
+        timestamp:
+          type: string
+          format: date-time

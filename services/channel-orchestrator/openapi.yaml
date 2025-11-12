@@ -1,0 +1,61 @@
+openapi: 3.1.0
+info:
+  title: Channel Orchestrator Service (Internal)
+  version: 1.0.0
+  description: |
+    Internal orchestrator service that routes notifications to appropriate channel services.
+    No external API - communicates only via Kafka events.
+
+servers:
+  - url: http://channel-orchestrator:3006
+    description: Internal service (Docker)
+
+tags:
+  - name: Health
+    description: Health check and monitoring
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      tags:
+        - Health
+      summary: Prometheus metrics
+      operationId: getMetrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        service:
+          type: string
+          example: "channel-orchestrator"
+        timestamp:
+          type: string
+          format: date-time

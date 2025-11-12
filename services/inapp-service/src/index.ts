@@ -8,8 +8,10 @@ initTracing({
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
 import { createLogger, KafkaClientWithDLQ } from '@notification-system/utils';
 import { InAppPayload, NotificationChannel } from '@notification-system/types';
+import { swaggerSpec, swaggerUiOptions } from './config/swagger.config';
 
 dotenv.config();
 
@@ -19,6 +21,15 @@ const PORT = process.env.PORT || 3004;
 
 app.use(cors());
 app.use(express.json());
+
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+
+// Raw OpenAPI spec endpoint
+app.get('/api-docs.json', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
 
 // Store active SSE connections
 const connections = new Map<string, Response[]>();
@@ -35,7 +46,29 @@ const kafkaClient = new KafkaClientWithDLQ(
   }
 );
 
-// SSE endpoint for clients to connect
+/**
+ * @swagger
+ * /events/{userId}:
+ *   get:
+ *     tags:
+ *       - Events
+ *     summary: SSE stream for user notifications
+ *     description: Establishes a Server-Sent Events connection for real-time notification delivery
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID to receive notifications for
+ *     responses:
+ *       200:
+ *         description: SSE connection established
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ */
 app.get('/events/:userId', (req: Request, res: Response) => {
   const { userId } = req.params;
 

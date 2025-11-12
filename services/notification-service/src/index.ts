@@ -9,11 +9,13 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
 import { createLogger, KafkaClient, MetricsCollector, metricsMiddleware } from '@notification-system/utils';
 import { notificationRoutes } from './routes/notification.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { DatabaseService } from './services/database.service';
 import { RedisService } from './services/redis.service';
+import { swaggerSpec, swaggerUiOptions } from './config/swagger.config';
 
 dotenv.config();
 
@@ -25,7 +27,9 @@ const PORT = process.env.PORT || 3000;
 const metrics = new MetricsCollector('notification-service');
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for Swagger UI
+}));
 app.use(cors());
 app.use(express.json());
 app.use(metricsMiddleware(metrics));
@@ -44,6 +48,15 @@ app.locals.kafkaClient = kafkaClient;
 app.locals.dbService = dbService;
 app.locals.redisService = redisService;
 app.locals.metrics = metrics;
+
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+
+// Raw OpenAPI spec endpoint
+app.get('/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
 
 // Routes
 app.use('/api/v1/notifications', notificationRoutes);

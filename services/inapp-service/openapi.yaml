@@ -1,0 +1,462 @@
+openapi: 3.1.0
+info:
+  title: In-App Notification Service API
+  version: 1.0.0
+  description: |
+    Real-time in-app notification delivery service using Server-Sent Events (SSE).
+
+    ## Features
+    - Server-Sent Events (SSE) for real-time delivery
+    - Multiple concurrent connections per user
+    - Automatic reconnection support
+    - Message buffering for offline users
+
+  contact:
+    name: API Support
+    email: support@notification-system.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3005
+    description: Development server (port 3005)
+  - url: https://staging-inapp.notification-system.com
+    description: Staging server
+  - url: https://inapp.notification-system.com
+    description: Production server
+
+tags:
+  - name: Events
+    description: Server-Sent Events (SSE) streaming endpoints
+  - name: Notifications
+    description: In-app notification management
+  - name: Health
+    description: Service health and monitoring endpoints
+
+paths:
+  /events/{userId}:
+    get:
+      tags:
+        - Events
+      summary: SSE stream for user notifications
+      description: |
+        Establishes a Server-Sent Events (SSE) connection for real-time notification delivery.
+
+        ## Connection Lifecycle
+        1. Client establishes connection
+        2. Server sends initial `connected` event
+        3. Server pushes notifications as they arrive
+        4. Client can close connection anytime
+        5. Client should implement reconnection logic
+
+        ## Event Types
+        - `connected`: Initial connection confirmation
+        - `notification`: New notification delivery
+        - `heartbeat`: Keep-alive ping (every 30s)
+
+        ## Example Usage (JavaScript)
+        ```javascript
+        const eventSource = new EventSource('/events/user123');
+
+        eventSource.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          console.log('Received:', data);
+        };
+
+        eventSource.onerror = (error) => {
+          console.error('Connection error:', error);
+          // Implement reconnection logic
+        };
+        ```
+      operationId: connectSSE
+      security: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: User ID to receive notifications for
+          schema:
+            type: string
+          example: "user123"
+        - name: Last-Event-ID
+          in: header
+          description: Last received event ID (for automatic reconnection)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE connection established
+          headers:
+            Content-Type:
+              description: MIME type for SSE
+              schema:
+                type: string
+                example: "text/event-stream"
+            Cache-Control:
+              description: Disable caching
+              schema:
+                type: string
+                example: "no-cache"
+            Connection:
+              description: Keep connection alive
+              schema:
+                type: string
+                example: "keep-alive"
+            X-Accel-Buffering:
+              description: Disable nginx buffering
+              schema:
+                type: string
+                example: "no"
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE event stream
+              examples:
+                connected-event:
+                  summary: Initial connection event
+                  value: |
+                    data: {"type":"connected"}
+
+                notification-event:
+                  summary: Notification delivery
+                  value: |
+                    id: notif_123
+                    data: {"type":"notification","id":"notif_123","title":"New Message","message":"You have a new message from John","actionUrl":"/messages/456","iconUrl":"https://cdn.example.com/icons/message.png","timestamp":"2025-11-13T10:30:00Z"}
+
+                heartbeat-event:
+                  summary: Keep-alive heartbeat
+                  value: |
+                    : heartbeat
+
+        '400':
+          description: Invalid user ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /notifications/{userId}:
+    get:
+      tags:
+        - Notifications
+      summary: Get user notifications
+      description: Retrieves all in-app notifications for a specific user (including unread)
+      operationId: getUserNotifications
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+          example: "user123"
+        - name: limit
+          in: query
+          description: Maximum number of notifications to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          example: 20
+        - name: offset
+          in: query
+          description: Number of notifications to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: unreadOnly
+          in: query
+          description: Return only unread notifications
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InAppNotification'
+                  metadata:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 42
+                      unread:
+                        type: integer
+                        example: 5
+                      limit:
+                        type: integer
+                        example: 20
+                      offset:
+                        type: integer
+                        example: 0
+              example:
+                success: true
+                data:
+                  - id: "notif_001"
+                    userId: "user123"
+                    title: "New Message"
+                    message: "You have a new message from John"
+                    actionUrl: "/messages/456"
+                    iconUrl: "https://cdn.example.com/icons/message.png"
+                    read: false
+                    createdAt: "2025-11-13T10:30:00Z"
+                  - id: "notif_002"
+                    userId: "user123"
+                    title: "Comment Reply"
+                    message: "Sarah replied to your comment"
+                    actionUrl: "/posts/789#comment-101"
+                    read: true
+                    createdAt: "2025-11-13T09:15:00Z"
+                metadata:
+                  total: 42
+                  unread: 5
+                  limit: 20
+                  offset: 0
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      description: Returns the health status of the in-app service
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                service: "inapp-service"
+                timestamp: "2025-11-13T10:30:00Z"
+                connections:
+                  active: 1234
+                  total: 5678
+                uptime: 86400
+                memory:
+                  rss: 52428800
+                  heapTotal: 20971520
+                  heapUsed: 15728640
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      tags:
+        - Health
+      summary: Prometheus metrics
+      description: Exposes Prometheus-compatible metrics
+      operationId: getMetrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP inapp_connections_active Currently active SSE connections
+                # TYPE inapp_connections_active gauge
+                inapp_connections_active 1234
+
+                # HELP inapp_connections_total Total SSE connections established
+                # TYPE inapp_connections_total counter
+                inapp_connections_total 5678
+
+                # HELP inapp_notifications_sent Total in-app notifications sent
+                # TYPE inapp_notifications_sent counter
+                inapp_notifications_sent{status="success"} 45678
+                inapp_notifications_sent{status="failed"} 123
+
+components:
+  schemas:
+    InAppNotification:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique notification identifier
+          example: "notif_1234567890abcdef"
+        userId:
+          type: string
+          description: Target user ID
+          example: "user123"
+        title:
+          type: string
+          description: Notification title
+          maxLength: 100
+          example: "New Message"
+        message:
+          type: string
+          description: Notification message content
+          maxLength: 500
+          example: "You have a new message from John"
+        actionUrl:
+          type: string
+          format: uri
+          description: URL to navigate when notification is clicked
+          example: "/messages/456"
+        iconUrl:
+          type: string
+          format: uri
+          description: Icon/avatar URL
+          example: "https://cdn.example.com/icons/message.png"
+        read:
+          type: boolean
+          description: Whether user has read this notification
+          default: false
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          description: When notification was created
+          example: "2025-11-13T10:30:00Z"
+
+    SSEEvent:
+      type: object
+      discriminator:
+        propertyName: type
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [connected, notification, heartbeat]
+          description: Event type
+      oneOf:
+        - $ref: '#/components/schemas/ConnectedEvent'
+        - $ref: '#/components/schemas/NotificationEvent'
+        - $ref: '#/components/schemas/HeartbeatEvent'
+
+    ConnectedEvent:
+      type: object
+      description: Initial connection confirmation
+      properties:
+        type:
+          type: string
+          enum: [connected]
+          example: "connected"
+
+    NotificationEvent:
+      type: object
+      description: Notification delivery event
+      properties:
+        type:
+          type: string
+          enum: [notification]
+          example: "notification"
+        id:
+          type: string
+          example: "notif_123"
+        title:
+          type: string
+          example: "New Message"
+        message:
+          type: string
+          example: "You have a new message from John"
+        actionUrl:
+          type: string
+          example: "/messages/456"
+        iconUrl:
+          type: string
+          example: "https://cdn.example.com/icons/message.png"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-11-13T10:30:00Z"
+
+    HeartbeatEvent:
+      type: object
+      description: Keep-alive heartbeat (sent as SSE comment)
+      properties:
+        type:
+          type: string
+          enum: [heartbeat]
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Overall health status
+        service:
+          type: string
+          description: Service name
+          example: "inapp-service"
+        timestamp:
+          type: string
+          format: date-time
+        connections:
+          type: object
+          properties:
+            active:
+              type: integer
+              description: Currently active SSE connections
+            total:
+              type: integer
+              description: Total connections since startup
+        uptime:
+          type: number
+          description: Service uptime in seconds
+        memory:
+          type: object
+          properties:
+            rss:
+              type: number
+            heapTotal:
+              type: number
+            heapUsed:
+              type: number
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "INVALID_USER_ID"
+            message:
+              type: string
+              example: "User ID is required"
