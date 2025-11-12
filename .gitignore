@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.log
+
+# Secrets
+*.pem
+*.key
+credentials.json
+secrets/
+
+# Test
+coverage/
+.pytest_cache/
