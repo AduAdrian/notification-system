@@ -1,0 +1,31 @@
+{
+  "name": "notification-system",
+  "version": "1.0.0",
+  "description": "Scalable event-driven microservices notification system",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "shared/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=services/*\"",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "eslint . --ext .ts,.js",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "k8s:deploy": "kubectl apply -f infrastructure/kubernetes/"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
