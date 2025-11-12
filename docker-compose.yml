@@ -83,6 +83,21 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.notification-service
     ports:
       - "3000:3000"
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     environment:
       PORT: 3000
       DB_HOST: postgres
@@ -103,11 +118,30 @@ services:
       kafka:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
 
   channel-orchestrator:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.channel-orchestrator
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     environment:
       KAFKA_BROKERS: kafka:9093
       MONGODB_URI: mongodb://admin:admin@mongodb:27017
@@ -124,6 +158,19 @@ services:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.email-service
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     environment:
       KAFKA_BROKERS: kafka:9093
       SENDGRID_API_KEY: ${SENDGRID_API_KEY}
@@ -138,6 +185,19 @@ services:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.sms-service
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     environment:
       KAFKA_BROKERS: kafka:9093
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
@@ -153,6 +213,19 @@ services:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.push-service
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     environment:
       KAFKA_BROKERS: kafka:9093
       GOOGLE_APPLICATION_CREDENTIALS: /app/firebase-credentials.json
@@ -171,6 +244,21 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.inapp-service
     ports:
       - "3004:3004"
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     environment:
       PORT: 3004
       KAFKA_BROKERS: kafka:9093
@@ -183,6 +271,12 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
 
   # Distributed Tracing
   jaeger:
