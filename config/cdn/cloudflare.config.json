@@ -1,0 +1,151 @@
+{
+  "name": "Notification System - Cloudflare CDN Configuration",
+  "description": "Cloudflare CDN configuration for optimal asset delivery and caching",
+  "zone_id": "${CLOUDFLARE_ZONE_ID}",
+  "account_id": "${CLOUDFLARE_ACCOUNT_ID}",
+  "settings": {
+    "caching": {
+      "level": "aggressive",
+      "browser_cache_ttl": 31536000,
+      "edge_cache_ttl": 2592000,
+      "always_online": true,
+      "development_mode": false
+    },
+    "performance": {
+      "minify": {
+        "css": true,
+        "html": true,
+        "js": true
+      },
+      "brotli": true,
+      "early_hints": true,
+      "http2": true,
+      "http3": true,
+      "zero_rtt": true,
+      "ipv6": true,
+      "websockets": true,
+      "rocket_loader": false,
+      "mirage": true,
+      "polish": "lossless",
+      "image_resizing": true
+    },
+    "security": {
+      "ssl": "full",
+      "tls_1_3": true,
+      "automatic_https_rewrites": true,
+      "always_use_https": true
+    }
+  },
+  "page_rules": [
+    {
+      "priority": 1,
+      "status": "active",
+      "targets": [
+        {
+          "target": "url",
+          "constraint": {
+            "operator": "matches",
+            "value": "*/static/*"
+          }
+        }
+      ],
+      "actions": [
+        {
+          "id": "cache_level",
+          "value": "cache_everything"
+        },
+        {
+          "id": "edge_cache_ttl",
+          "value": 2592000
+        },
+        {
+          "id": "browser_cache_ttl",
+          "value": 31536000
+        }
+      ]
+    },
+    {
+      "priority": 2,
+      "status": "active",
+      "targets": [
+        {
+          "target": "url",
+          "constraint": {
+            "operator": "matches",
+            "value": "*/api/*"
+          }
+        }
+      ],
+      "actions": [
+        {
+          "id": "cache_level",
+          "value": "bypass"
+        }
+      ]
+    },
+    {
+      "priority": 3,
+      "status": "active",
+      "targets": [
+        {
+          "target": "url",
+          "constraint": {
+            "operator": "matches",
+            "value": "*.(jpg|jpeg|png|gif|svg|webp|ico|css|js|woff|woff2|ttf|eot|otf)"
+          }
+        }
+      ],
+      "actions": [
+        {
+          "id": "cache_level",
+          "value": "cache_everything"
+        },
+        {
+          "id": "edge_cache_ttl",
+          "value": 2592000
+        }
+      ]
+    }
+  ],
+  "cache_rules": [
+    {
+      "name": "Static Assets",
+      "enabled": true,
+      "expression": "(http.request.uri.path matches \"\\\\.(jpg|jpeg|png|gif|svg|css|js|woff|woff2|ttf|eot)$\")",
+      "action": {
+        "cache": true,
+        "edge_ttl": 2592000,
+        "browser_ttl": 31536000,
+        "cache_key": {
+          "include_host": true,
+          "include_query_string": false
+        }
+      }
+    },
+    {
+      "name": "API Responses",
+      "enabled": true,
+      "expression": "(http.request.uri.path contains \"/api/\")",
+      "action": {
+        "cache": false
+      }
+    },
+    {
+      "name": "Health Check",
+      "enabled": true,
+      "expression": "(http.request.uri.path eq \"/health\")",
+      "action": {
+        "cache": false
+      }
+    }
+  ],
+  "workers": {
+    "enabled": true,
+    "routes": [
+      {
+        "pattern": "*/static/*",
+        "script": "cdn-optimization-worker"
+      }
+    ]
+  }
+}

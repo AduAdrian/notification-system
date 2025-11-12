@@ -1,0 +1,178 @@
+# Prometheus Configuration for Notification System
+# Collects metrics from all microservices and infrastructure components
+
+global:
+  scrape_interval: 15s      # Scrape targets every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  external_labels:
+    cluster: 'notification-system'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - 'alerts/*.yml'
+  - 'recording_rules/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Notification Service
+  - job_name: 'notification-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['notification-service:3000']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'notification-service'
+
+  # Channel Orchestrator Service
+  - job_name: 'channel-orchestrator'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['channel-orchestrator:3001']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'channel-orchestrator'
+
+  # Email Service
+  - job_name: 'email-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['email-service:3002']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'email-service'
+
+  # SMS Service
+  - job_name: 'sms-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['sms-service:3003']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'sms-service'
+
+  # Push Service
+  - job_name: 'push-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['push-service:3004']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'push-service'
+
+  # In-App Service
+  - job_name: 'inapp-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['inapp-service:3005']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'inapp-service'
+
+  # PostgreSQL Exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'postgres'
+
+  # Redis Exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'redis'
+
+  # Kafka Exporter
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'kafka'
+
+  # MongoDB Exporter
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'mongodb'
+
+  # Node Exporter (System metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'node'
+
+  # cAdvisor (Container metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'cadvisor'
+
+  # Service Discovery for Kubernetes (if deployed on K8s)
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+# Storage configuration
+storage:
+  tsdb:
+    path: /prometheus/data
+    retention:
+      time: 30d  # Keep data for 30 days
+      size: 50GB # Maximum storage size

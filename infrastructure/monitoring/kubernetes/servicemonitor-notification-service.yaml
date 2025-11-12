@@ -1,0 +1,32 @@
+# ServiceMonitor for Notification Service
+# This CRD is used by Prometheus Operator to automatically discover and scrape metrics
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: notification-service
+  namespace: notification-system
+  labels:
+    app: notification-service
+    tier: api
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: notification-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service
+  namespaceSelector:
+    matchNames:
+      - notification-system

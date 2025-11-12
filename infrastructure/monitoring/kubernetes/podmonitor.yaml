@@ -1,0 +1,31 @@
+# PodMonitor for automatic pod-level metrics discovery
+# Useful for discovering metrics from pods that don't have a Service
+
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: notification-system-pods
+  namespace: notification-system
+  labels:
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      tier: delivery
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: app
+        - sourceLabels: [__meta_kubernetes_pod_label_channel]
+          targetLabel: channel
+  namespaceSelector:
+    matchNames:
+      - notification-system

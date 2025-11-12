@@ -1,0 +1,196 @@
+{
+  "name": "Notification System - CloudFront CDN Configuration",
+  "description": "AWS CloudFront CDN configuration for optimal asset delivery",
+  "distribution_config": {
+    "CallerReference": "notification-system-cdn",
+    "Comment": "CDN for Notification System static assets",
+    "Enabled": true,
+    "PriceClass": "PriceClass_All",
+    "HttpVersion": "http2and3",
+    "IsIPV6Enabled": true,
+    "Origins": {
+      "Quantity": 2,
+      "Items": [
+        {
+          "Id": "notification-api",
+          "DomainName": "${API_DOMAIN}",
+          "CustomOriginConfig": {
+            "HTTPPort": 80,
+            "HTTPSPort": 443,
+            "OriginProtocolPolicy": "https-only",
+            "OriginSslProtocols": {
+              "Quantity": 3,
+              "Items": ["TLSv1.2", "TLSv1.3"]
+            },
+            "OriginReadTimeout": 30,
+            "OriginKeepaliveTimeout": 5
+          },
+          "ConnectionAttempts": 3,
+          "ConnectionTimeout": 10,
+          "OriginShield": {
+            "Enabled": true,
+            "OriginShieldRegion": "us-east-1"
+          }
+        },
+        {
+          "Id": "s3-static-assets",
+          "DomainName": "${S3_BUCKET}.s3.amazonaws.com",
+          "S3OriginConfig": {
+            "OriginAccessIdentity": ""
+          }
+        }
+      ]
+    },
+    "DefaultCacheBehavior": {
+      "TargetOriginId": "notification-api",
+      "ViewerProtocolPolicy": "redirect-to-https",
+      "AllowedMethods": {
+        "Quantity": 7,
+        "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+        "CachedMethods": {
+          "Quantity": 2,
+          "Items": ["GET", "HEAD"]
+        }
+      },
+      "Compress": true,
+      "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+      "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+      "ResponseHeadersPolicyId": "60669652-455b-4ae9-85a7-c6c5e926d5fe",
+      "MinTTL": 0,
+      "DefaultTTL": 0,
+      "MaxTTL": 0,
+      "ForwardedValues": {
+        "QueryString": true,
+        "Cookies": {
+          "Forward": "all"
+        },
+        "Headers": {
+          "Quantity": 4,
+          "Items": [
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "Origin"
+          ]
+        }
+      },
+      "FunctionAssociations": {
+        "Quantity": 1,
+        "Items": [
+          {
+            "FunctionARN": "${CLOUDFRONT_FUNCTION_ARN}",
+            "EventType": "viewer-request"
+          }
+        ]
+      }
+    },
+    "CacheBehaviors": {
+      "Quantity": 3,
+      "Items": [
+        {
+          "PathPattern": "/static/*",
+          "TargetOriginId": "s3-static-assets",
+          "ViewerProtocolPolicy": "redirect-to-https",
+          "AllowedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          },
+          "Compress": true,
+          "MinTTL": 86400,
+          "DefaultTTL": 2592000,
+          "MaxTTL": 31536000,
+          "ForwardedValues": {
+            "QueryString": false,
+            "Cookies": {
+              "Forward": "none"
+            }
+          }
+        },
+        {
+          "PathPattern": "*.jpg",
+          "TargetOriginId": "s3-static-assets",
+          "ViewerProtocolPolicy": "redirect-to-https",
+          "Compress": true,
+          "MinTTL": 2592000,
+          "DefaultTTL": 2592000,
+          "MaxTTL": 31536000
+        },
+        {
+          "PathPattern": "/api/*",
+          "TargetOriginId": "notification-api",
+          "ViewerProtocolPolicy": "redirect-to-https",
+          "AllowedMethods": {
+            "Quantity": 7,
+            "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+          },
+          "Compress": true,
+          "MinTTL": 0,
+          "DefaultTTL": 0,
+          "MaxTTL": 0
+        }
+      ]
+    },
+    "CustomErrorResponses": {
+      "Quantity": 2,
+      "Items": [
+        {
+          "ErrorCode": 404,
+          "ResponsePagePath": "/404.html",
+          "ResponseCode": "404",
+          "ErrorCachingMinTTL": 300
+        },
+        {
+          "ErrorCode": 500,
+          "ResponsePagePath": "/500.html",
+          "ResponseCode": "500",
+          "ErrorCachingMinTTL": 0
+        }
+      ]
+    },
+    "ViewerCertificate": {
+      "ACMCertificateArn": "${ACM_CERTIFICATE_ARN}",
+      "SSLSupportMethod": "sni-only",
+      "MinimumProtocolVersion": "TLSv1.2_2021"
+    },
+    "Logging": {
+      "Enabled": true,
+      "IncludeCookies": false,
+      "Bucket": "${S3_LOGS_BUCKET}.s3.amazonaws.com",
+      "Prefix": "cdn-logs/"
+    },
+    "WebACLId": "${WAF_ACL_ARN}"
+  },
+  "cache_policies": {
+    "static_assets": {
+      "Name": "StaticAssetsCachePolicy",
+      "MinTTL": 86400,
+      "MaxTTL": 31536000,
+      "DefaultTTL": 2592000,
+      "ParametersInCacheKeyAndForwardedToOrigin": {
+        "EnableAcceptEncodingGzip": true,
+        "EnableAcceptEncodingBrotli": true,
+        "QueryStringsConfig": {
+          "QueryStringBehavior": "none"
+        },
+        "HeadersConfig": {
+          "HeaderBehavior": "none"
+        },
+        "CookiesConfig": {
+          "CookieBehavior": "none"
+        }
+      }
+    }
+  },
+  "deployment": {
+    "terraform": {
+      "provider": "aws",
+      "region": "us-east-1",
+      "resources": [
+        "aws_cloudfront_distribution",
+        "aws_cloudfront_cache_policy",
+        "aws_cloudfront_origin_request_policy",
+        "aws_cloudfront_response_headers_policy"
+      ]
+    }
+  }
+}

@@ -1,0 +1,141 @@
+# PrometheusRule CRD for Kubernetes
+# This allows Prometheus Operator to load alert rules automatically
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: notification-system-alerts
+  namespace: notification-system
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: notification_system_alerts
+      interval: 30s
+      rules:
+        # Service Availability Alerts
+        - alert: ServiceDown
+          expr: up{namespace="notification-system"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            category: availability
+          annotations:
+            summary: "Service {{ $labels.service }} is down"
+            description: "{{ $labels.service }} in namespace {{ $labels.namespace }} has been down for more than 1 minute."
+
+        # High Error Rate Alert (SLO: 99.9% success rate)
+        - alert: HighErrorRate
+          expr: |
+            (
+              sum(rate(notification_delivery_total{status="failed",namespace="notification-system"}[5m])) by (service, channel)
+              /
+              sum(rate(notification_delivery_total{namespace="notification-system"}[5m])) by (service, channel)
+            ) > 0.001
+          for: 5m
+          labels:
+            severity: warning
+            category: reliability
+          annotations:
+            summary: "High error rate in {{ $labels.service }}"
+            description: "{{ $labels.service }} has error rate above 0.1% for {{ $labels.channel }} channel"
+
+        # Critical Error Rate Alert
+        - alert: CriticalErrorRate
+          expr: |
+            (
+              sum(rate(notification_delivery_total{status="failed",namespace="notification-system"}[5m])) by (service, channel)
+              /
+              sum(rate(notification_delivery_total{namespace="notification-system"}[5m])) by (service, channel)
+            ) > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            category: reliability
+          annotations:
+            summary: "Critical error rate in {{ $labels.service }}"
+            description: "{{ $labels.service }} has error rate above 5% for {{ $labels.channel }} channel"
+
+        # High Latency Alert (SLO: p95 < 1s)
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(notification_delivery_duration_seconds_bucket{namespace="notification-system"}[5m])) by (service, channel, le)
+            ) > 1
+          for: 5m
+          labels:
+            severity: warning
+            category: performance
+          annotations:
+            summary: "High latency in {{ $labels.service }}"
+            description: "{{ $labels.service }} p95 latency is above 1s for {{ $labels.channel }}"
+
+        # Pod Restart Alert
+        - alert: PodRestartingTooOften
+          expr: |
+            rate(kube_pod_container_status_restarts_total{namespace="notification-system"}[15m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            category: availability
+          annotations:
+            summary: "Pod {{ $labels.pod }} is restarting frequently"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted more than 0.1 times per minute in the last 15 minutes"
+
+        # Memory Usage Alert
+        - alert: HighMemoryUsage
+          expr: |
+            (
+              container_memory_working_set_bytes{namespace="notification-system"}
+              /
+              container_spec_memory_limit_bytes{namespace="notification-system"}
+            ) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+            category: saturation
+          annotations:
+            summary: "High memory usage in {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} is using more than 90% of its memory limit"
+
+        # CPU Throttling Alert
+        - alert: CPUThrottling
+          expr: |
+            rate(container_cpu_cfs_throttled_seconds_total{namespace="notification-system"}[5m]) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            category: saturation
+          annotations:
+            summary: "CPU throttling in {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} is experiencing CPU throttling"
+
+    - name: sli_recording_rules
+      interval: 30s
+      rules:
+        # SLI: Availability - Percentage of successful requests
+        - record: notification:availability:ratio
+          expr: |
+            sum(rate(notification_delivery_total{status="success",namespace="notification-system"}[5m])) by (channel)
+            /
+            sum(rate(notification_delivery_total{namespace="notification-system"}[5m])) by (channel)
+
+        # SLI: Latency - p95 latency
+        - record: notification:latency:p95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(notification_delivery_duration_seconds_bucket{namespace="notification-system"}[5m])) by (channel, le)
+            )
+
+        # SLI: Latency - p99 latency
+        - record: notification:latency:p99
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(notification_delivery_duration_seconds_bucket{namespace="notification-system"}[5m])) by (channel, le)
+            )
+
+        # SLI: Throughput - Requests per second
+        - record: notification:throughput:rps
+          expr: |
+            sum(rate(notification_delivery_total{namespace="notification-system"}[5m])) by (channel, service)

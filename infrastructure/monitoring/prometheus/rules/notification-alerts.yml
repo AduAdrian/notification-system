@@ -1,0 +1,230 @@
+# Prometheus Alert Rules for Notification System
+# Based on SRE best practices: symptom-based alerting, SLO-based alerts
+
+groups:
+  - name: notification_system_alerts
+    interval: 30s
+    rules:
+      # Service Availability Alerts
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.service }} is down"
+          description: "{{ $labels.service }} has been down for more than 1 minute."
+
+      # High Error Rate Alert (SLO: 99.9% success rate)
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(notification_delivery_total{status="failed"}[5m])) by (service, channel)
+            /
+            sum(rate(notification_delivery_total[5m])) by (service, channel)
+          ) > 0.001
+        for: 5m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "High error rate in {{ $labels.service }}"
+          description: "{{ $labels.service }} has error rate above 0.1% for {{ $labels.channel }} channel (current: {{ $value | humanizePercentage }})"
+
+      # Critical Error Rate Alert
+      - alert: CriticalErrorRate
+        expr: |
+          (
+            sum(rate(notification_delivery_total{status="failed"}[5m])) by (service, channel)
+            /
+            sum(rate(notification_delivery_total[5m])) by (service, channel)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          category: reliability
+        annotations:
+          summary: "Critical error rate in {{ $labels.service }}"
+          description: "{{ $labels.service }} has error rate above 5% for {{ $labels.channel }} channel (current: {{ $value | humanizePercentage }})"
+
+      # High Latency Alert (SLO: p95 < 1s)
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(notification_delivery_duration_seconds_bucket[5m])) by (service, channel, le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High latency in {{ $labels.service }}"
+          description: "{{ $labels.service }} p95 latency is above 1s for {{ $labels.channel }} (current: {{ $value }}s)"
+
+      # Critical Latency Alert (SLO: p95 < 3s)
+      - alert: CriticalLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(notification_delivery_duration_seconds_bucket[5m])) by (service, channel, le)
+          ) > 3
+        for: 2m
+        labels:
+          severity: critical
+          category: performance
+        annotations:
+          summary: "Critical latency in {{ $labels.service }}"
+          description: "{{ $labels.service }} p95 latency is above 3s for {{ $labels.channel }} (current: {{ $value }}s)"
+
+      # Queue Depth Alert
+      - alert: HighQueueDepth
+        expr: kafka_consumer_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: saturation
+        annotations:
+          summary: "High Kafka queue depth for {{ $labels.service }}"
+          description: "Consumer lag is above 1000 messages (current: {{ $value }})"
+
+      # Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            process_resident_memory_bytes
+            /
+            container_spec_memory_limit_bytes
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          category: saturation
+        annotations:
+          summary: "High memory usage in {{ $labels.service }}"
+          description: "{{ $labels.service }} is using more than 90% of available memory (current: {{ $value | humanizePercentage }})"
+
+      # CPU Usage Alert
+      - alert: HighCPUUsage
+        expr: |
+          rate(process_cpu_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: saturation
+        annotations:
+          summary: "High CPU usage in {{ $labels.service }}"
+          description: "{{ $labels.service }} CPU usage is above 80% (current: {{ $value | humanizePercentage }})"
+
+      # Database Connection Pool Alert
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: |
+          (
+            db_connections_active
+            /
+            db_connections_max
+          ) > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          category: saturation
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Database connection pool is above 90% capacity (current: {{ $value | humanizePercentage }})"
+
+      # Rate Limit Alert
+      - alert: RateLimitExceeded
+        expr: rate(http_requests_rate_limited_total[1m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: saturation
+        annotations:
+          summary: "High rate limit rejections in {{ $labels.service }}"
+          description: "Rate limit exceeded more than 10 times per minute"
+
+      # Notification Delivery Success Rate (SLO)
+      - alert: NotificationDeliverySLOBreach
+        expr: |
+          (
+            sum(rate(notification_delivery_total{status="success"}[1h])) by (channel)
+            /
+            sum(rate(notification_delivery_total[1h])) by (channel)
+          ) < 0.999
+        for: 5m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "Notification delivery SLO breach for {{ $labels.channel }}"
+          description: "Success rate below 99.9% SLO (current: {{ $value | humanizePercentage }})"
+
+      # Kafka Connection Alert
+      - alert: KafkaConnectionLost
+        expr: kafka_connected == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Kafka connection lost for {{ $labels.service }}"
+          description: "Service {{ $labels.service }} has lost connection to Kafka"
+
+      # Redis Connection Alert
+      - alert: RedisConnectionLost
+        expr: redis_connected == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Redis connection lost for {{ $labels.service }}"
+          description: "Service {{ $labels.service }} has lost connection to Redis"
+
+      # Dead Letter Queue Alert
+      - alert: HighDeadLetterQueueRate
+        expr: rate(notification_dead_letter_queue_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "High dead letter queue rate"
+          description: "More than 1 notification per second being sent to DLQ (current: {{ $value }}/s)"
+
+  - name: sli_recording_rules
+    interval: 30s
+    rules:
+      # SLI: Availability - Percentage of successful requests
+      - record: notification:availability:ratio
+        expr: |
+          sum(rate(notification_delivery_total{status="success"}[5m])) by (channel)
+          /
+          sum(rate(notification_delivery_total[5m])) by (channel)
+
+      # SLI: Latency - p95 latency
+      - record: notification:latency:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(notification_delivery_duration_seconds_bucket[5m])) by (channel, le)
+          )
+
+      # SLI: Latency - p99 latency
+      - record: notification:latency:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(notification_delivery_duration_seconds_bucket[5m])) by (channel, le)
+          )
+
+      # SLI: Throughput - Requests per second
+      - record: notification:throughput:rps
+        expr: |
+          sum(rate(notification_delivery_total[5m])) by (channel, service)
+
+      # SLI: Error budget consumption (30-day window)
+      - record: notification:error_budget:consumed_30d
+        expr: |
+          1 - (
+            sum(rate(notification_delivery_total{status="success"}[30d])) by (channel)
+            /
+            sum(rate(notification_delivery_total[30d])) by (channel)
+          )

@@ -10,18 +10,33 @@
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=services/*\"",
     "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=__tests__",
+    "test:integration": "jest --testPathPattern=integration",
+    "test:e2e": "jest --testPathPattern=e2e",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:workspaces": "npm run test --workspaces",
     "lint": "eslint . --ext .ts,.js",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
-    "k8s:deploy": "kubectl apply -f infrastructure/kubernetes/"
+    "k8s:deploy": "kubectl apply -f infrastructure/kubernetes/",
+    "perf:setup": "bash scripts/setup-performance.sh",
+    "perf:test": "bash scripts/run-load-tests.sh",
+    "perf:monitor": "docker-compose -f infrastructure/monitoring/docker-compose.monitoring.yml up -d",
+    "perf:stop-monitor": "docker-compose -f infrastructure/monitoring/docker-compose.monitoring.yml down"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@types/jest": "^29.5.11",
+    "@types/supertest": "^6.0.2",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "concurrently": "^8.2.2",
     "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "supertest": "^6.3.3",
     "typescript": "^5.3.3"
   },
   "engines": {

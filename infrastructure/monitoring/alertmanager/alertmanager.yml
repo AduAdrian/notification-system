@@ -1,0 +1,152 @@
+# AlertManager Configuration for Notification System
+
+global:
+  resolve_timeout: 5m
+  # SMTP configuration for email alerts
+  smtp_from: 'alerts@notification-system.com'
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_auth_username: '${SMTP_USERNAME}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
+
+# Templates for alert notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alerts
+route:
+  # Default receiver
+  receiver: 'team-notifications'
+
+  # Group alerts by these labels
+  group_by: ['alertname', 'cluster', 'service']
+
+  # Wait time before sending initial notification
+  group_wait: 10s
+
+  # Wait time before sending notifications about new alerts in the same group
+  group_interval: 10s
+
+  # Wait time before re-sending a notification
+  repeat_interval: 12h
+
+  # Child routes
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'team-critical'
+      group_wait: 0s
+      group_interval: 5m
+      repeat_interval: 4h
+
+    # SLO breach alerts
+    - match:
+        category: slo
+      receiver: 'team-slo'
+      group_wait: 5m
+      repeat_interval: 6h
+
+    # Performance alerts
+    - match:
+        category: performance
+      receiver: 'team-performance'
+      group_interval: 15m
+      repeat_interval: 24h
+
+    # Infrastructure alerts
+    - match:
+        tier: infrastructure
+      receiver: 'team-infrastructure'
+      group_interval: 10m
+
+# Inhibition rules - prevent certain alerts when others are firing
+inhibit_rules:
+  # Inhibit warning alerts if critical alert is firing
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['service', 'channel']
+
+  # Inhibit specific alerts if service is down
+  - source_match:
+      alertname: ServiceDown
+    target_match_re:
+      alertname: High.*|Critical.*
+    equal: ['service']
+
+# Receivers for different alert types
+receivers:
+  # Default receiver - general notifications
+  - name: 'team-notifications'
+    email_configs:
+      - to: 'team@notification-system.com'
+        headers:
+          Subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        html: '{{ template "email.default.html" . }}'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts'
+        title: 'Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+  # Critical alerts receiver
+  - name: 'team-critical'
+    email_configs:
+      - to: 'oncall@notification-system.com'
+        headers:
+          Subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+          Priority: 'urgent'
+        html: '{{ template "email.default.html" . }}'
+    pagerduty_configs:
+      - routing_key: '${PAGERDUTY_ROUTING_KEY}'
+        description: '{{ .GroupLabels.alertname }}'
+        severity: 'critical'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-critical'
+        title: ':fire: CRITICAL: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+
+  # SLO alerts receiver
+  - name: 'team-slo'
+    email_configs:
+      - to: 'sre-team@notification-system.com'
+        headers:
+          Subject: '[SLO BREACH] {{ .GroupLabels.alertname }}'
+        html: '{{ template "email.default.html" . }}'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#slo-alerts'
+        title: ':warning: SLO Breach: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'warning'
+
+  # Performance alerts receiver
+  - name: 'team-performance'
+    email_configs:
+      - to: 'performance-team@notification-system.com'
+        headers:
+          Subject: '[PERFORMANCE] {{ .GroupLabels.alertname }}'
+        html: '{{ template "email.default.html" . }}'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#performance'
+        title: 'Performance Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  # Infrastructure alerts receiver
+  - name: 'team-infrastructure'
+    email_configs:
+      - to: 'infrastructure-team@notification-system.com'
+        headers:
+          Subject: '[INFRASTRUCTURE] {{ .GroupLabels.alertname }}'
+        html: '{{ template "email.default.html" . }}'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#infrastructure'
+        title: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'

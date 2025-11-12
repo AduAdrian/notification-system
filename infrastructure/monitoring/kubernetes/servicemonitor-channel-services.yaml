@@ -1,0 +1,169 @@
+# ServiceMonitors for all Channel Services
+# Email, SMS, Push, In-App Services
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: email-service
+  namespace: notification-system
+  labels:
+    app: email-service
+    tier: delivery
+    channel: email
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: email-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service
+        - targetLabel: channel
+          replacement: email
+  namespaceSelector:
+    matchNames:
+      - notification-system
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sms-service
+  namespace: notification-system
+  labels:
+    app: sms-service
+    tier: delivery
+    channel: sms
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: sms-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service
+        - targetLabel: channel
+          replacement: sms
+  namespaceSelector:
+    matchNames:
+      - notification-system
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: push-service
+  namespace: notification-system
+  labels:
+    app: push-service
+    tier: delivery
+    channel: push
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: push-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service
+        - targetLabel: channel
+          replacement: push
+  namespaceSelector:
+    matchNames:
+      - notification-system
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: inapp-service
+  namespace: notification-system
+  labels:
+    app: inapp-service
+    tier: delivery
+    channel: inapp
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: inapp-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service
+        - targetLabel: channel
+          replacement: inapp
+  namespaceSelector:
+    matchNames:
+      - notification-system
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: channel-orchestrator
+  namespace: notification-system
+  labels:
+    app: channel-orchestrator
+    tier: orchestration
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: channel-orchestrator
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service
+  namespaceSelector:
+    matchNames:
+      - notification-system

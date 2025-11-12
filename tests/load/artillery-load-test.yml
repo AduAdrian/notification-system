@@ -1,0 +1,226 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    # Warm up phase - gradually increase load
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+
+    # Ramp up phase - increase to moderate load
+    - duration: 120
+      arrivalRate: 5
+      rampTo: 50
+      name: "Ramp up"
+
+    # Sustained load phase - maintain high load
+    - duration: 300
+      arrivalRate: 50
+      name: "Sustained load"
+
+    # Peak load phase - maximum load
+    - duration: 120
+      arrivalRate: 50
+      rampTo: 100
+      name: "Peak load"
+
+    # Cool down phase - gradual decrease
+    - duration: 60
+      arrivalRate: 100
+      rampTo: 0
+      name: "Cool down"
+
+  # Performance targets
+  ensure:
+    maxErrorRate: 1  # Max 1% error rate
+    p95: 500        # 95th percentile response time < 500ms
+    p99: 1000       # 99th percentile response time < 1000ms
+
+  # Payload configuration
+  payload:
+    path: "./test-data.csv"
+    fields:
+      - userId
+      - channel
+      - priority
+    order: random
+    skipHeader: true
+
+  # Environment variables
+  variables:
+    apiVersion: "/api/v1"
+
+  # Plugins for enhanced reporting
+  plugins:
+    expect: {}
+    metrics-by-endpoint:
+      stripQueryString: true
+      excludedMetrics:
+        - "http.request_rate"
+    publish-metrics:
+      - type: statsd
+        host: localhost
+        port: 8125
+        prefix: "artillery"
+
+  # HTTP settings
+  http:
+    timeout: 30
+    pool: 100  # Connection pool size
+
+  # Processor for custom logic
+  processor: "./artillery-processor.js"
+
+scenarios:
+  # Scenario 1: Create Notification
+  - name: "Create Notification"
+    weight: 40
+    flow:
+      - post:
+          url: "{{ apiVersion }}/notifications"
+          headers:
+            Content-Type: "application/json"
+          json:
+            userId: "user-{{ $randomNumber(1, 1000) }}"
+            channels: ["{{ channel }}"]
+            priority: "{{ priority }}"
+            subject: "Load Test Notification {{ $timestamp }}"
+            message: "This is a load test notification"
+            metadata:
+              testType: "artillery"
+              timestamp: "{{ $timestamp }}"
+          capture:
+            - json: "$.id"
+              as: "notificationId"
+          expect:
+            - statusCode: [200, 201]
+            - contentType: json
+            - hasProperty: id
+          afterResponse: "logNotificationCreated"
+
+  # Scenario 2: Get User Notifications
+  - name: "Get User Notifications"
+    weight: 30
+    flow:
+      - get:
+          url: "{{ apiVersion }}/notifications/user/user-{{ $randomNumber(1, 1000) }}"
+          qs:
+            limit: 10
+            offset: 0
+          expect:
+            - statusCode: 200
+            - contentType: json
+            - hasProperty: notifications
+          afterResponse: "logNotificationsRetrieved"
+
+  # Scenario 3: Get Notification by ID
+  - name: "Get Notification by ID"
+    weight: 15
+    flow:
+      - get:
+          url: "{{ apiVersion }}/notifications/{{ notificationId }}"
+          beforeRequest: "generateNotificationId"
+          expect:
+            - statusCode: [200, 404]
+          afterResponse: "logNotificationFetch"
+
+  # Scenario 4: Update Notification Status
+  - name: "Update Notification Status"
+    weight: 10
+    flow:
+      - put:
+          url: "{{ apiVersion }}/notifications/{{ notificationId }}/status"
+          beforeRequest: "generateNotificationId"
+          json:
+            status: "read"
+          expect:
+            - statusCode: [200, 404]
+          afterResponse: "logStatusUpdate"
+
+  # Scenario 5: Health Check
+  - name: "Health Check"
+    weight: 5
+    flow:
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+            - contentType: json
+            - hasProperty: status
+            - equals:
+                - "{{ status }}"
+                - "healthy"
+
+  # Scenario 6: Mixed Operations (realistic user flow)
+  - name: "Mixed User Operations"
+    weight: 20
+    flow:
+      # Create a notification
+      - post:
+          url: "{{ apiVersion }}/notifications"
+          json:
+            userId: "user-{{ $randomNumber(1, 1000) }}"
+            channels: ["email", "push"]
+            priority: "medium"
+            subject: "Test Notification"
+            message: "Testing mixed operations"
+          capture:
+            - json: "$.id"
+              as: "createdNotificationId"
+
+      # Wait a bit (think time)
+      - think: 2
+
+      # Fetch user notifications
+      - get:
+          url: "{{ apiVersion }}/notifications/user/user-{{ $randomNumber(1, 1000) }}"
+          qs:
+            limit: 20
+            offset: 0
+
+      # Think time
+      - think: 1
+
+      # Update notification status
+      - put:
+          url: "{{ apiVersion }}/notifications/{{ createdNotificationId }}/status"
+          json:
+            status: "read"
+
+      # Final think time
+      - think: 3
+
+  # Scenario 7: Stress Test - Rapid Fire Requests
+  - name: "Stress Test"
+    weight: 10
+    flow:
+      - loop:
+          - post:
+              url: "{{ apiVersion }}/notifications"
+              json:
+                userId: "stress-user-{{ $randomNumber(1, 100) }}"
+                channels: ["{{ channel }}"]
+                priority: "high"
+                subject: "Stress Test {{ $randomString(10) }}"
+                message: "Rapid fire notification"
+          - think: 0.1
+        count: 5
+
+  # Scenario 8: Read-Heavy Operations
+  - name: "Read-Heavy Operations"
+    weight: 15
+    flow:
+      - loop:
+          - get:
+              url: "{{ apiVersion }}/notifications/user/user-{{ $randomNumber(1, 1000) }}"
+              qs:
+                limit: 10
+                offset: "{{ $randomNumber(0, 100) }}"
+          - think: 0.5
+        count: 10
+
+# Test data CSV structure
+# userId,channel,priority
+# user-1,email,low
+# user-2,sms,medium
+# user-3,push,high
+# user-4,inapp,urgent
