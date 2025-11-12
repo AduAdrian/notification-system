@@ -6,6 +6,12 @@ const logger = createLogger('database-service');
 
 export class DatabaseService {
   private _pool: Pool;
+  private poolStats = {
+    totalConnects: 0,
+    totalErrors: 0,
+    totalAcquires: 0,
+    totalReleases: 0,
+  };
 
   constructor() {
     this._pool = new Pool({
@@ -14,9 +20,50 @@ export class DatabaseService {
       database: process.env.DB_NAME || 'notifications',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      // 2025 best practices: min/max pool size based on typical load
+      min: 5, // Maintain minimum 5 connections for fast response
+      max: 25, // Increased from 20 for better concurrent handling
+      // Connection lifecycle settings
+      idleTimeoutMillis: 30000, // Close idle connections after 30s
+      connectionTimeoutMillis: 3000, // Increased to 3s for better reliability
+      // Query timeouts to prevent hanging queries
+      statement_timeout: 10000, // 10s max for any single statement
+      query_timeout: 10000, // 10s max for query execution
+      // Connection settings
+      allowExitOnIdle: false, // Keep pool alive even with no active connections
+    });
+
+    // Pool event monitoring for observability
+    this._pool.on('connect', (client) => {
+      this.poolStats.totalConnects++;
+      logger.debug('New database connection established', {
+        totalConnections: this._pool.totalCount,
+        idleConnections: this._pool.idleCount,
+        waitingClients: this._pool.waitingCount,
+      });
+    });
+
+    this._pool.on('acquire', (client) => {
+      this.poolStats.totalAcquires++;
+      logger.debug('Database connection acquired from pool', {
+        totalConnections: this._pool.totalCount,
+        idleConnections: this._pool.idleCount,
+      });
+    });
+
+    this._pool.on('remove', (client) => {
+      logger.debug('Database connection removed from pool', {
+        totalConnections: this._pool.totalCount,
+        idleConnections: this._pool.idleCount,
+      });
+    });
+
+    this._pool.on('error', (err, client) => {
+      this.poolStats.totalErrors++;
+      logger.error('Unexpected database pool error', {
+        error: err.message,
+        totalErrors: this.poolStats.totalErrors,
+      });
     });
   }
 
@@ -43,6 +90,44 @@ export class DatabaseService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Get connection pool statistics for monitoring and metrics
+   * Returns real-time pool utilization data
+   */
+  getPoolStats() {
+    return {
+      totalCount: this._pool.totalCount, // Total connections in pool
+      idleCount: this._pool.idleCount, // Available idle connections
+      waitingCount: this._pool.waitingCount, // Clients waiting for connection
+      maxSize: 25,
+      minSize: 5,
+      utilization: ((this._pool.totalCount - this._pool.idleCount) / 25) * 100,
+      lifetime: {
+        totalConnects: this.poolStats.totalConnects,
+        totalErrors: this.poolStats.totalErrors,
+        totalAcquires: this.poolStats.totalAcquires,
+      },
+    };
+  }
+
+  /**
+   * Get detailed health check including pool metrics
+   */
+  async getDetailedHealth() {
+    const isHealthy = await this.isHealthy();
+    const poolStats = this.getPoolStats();
+
+    return {
+      status: isHealthy ? 'up' : 'down',
+      responseTime: 0, // Will be set by caller
+      poolStats,
+      warnings: [
+        poolStats.waitingCount > 5 ? 'High number of waiting clients' : null,
+        poolStats.utilization > 80 ? 'Pool utilization above 80%' : null,
+      ].filter(Boolean),
+    };
   }
 
   async createNotification(notification: Notification): Promise<void> {

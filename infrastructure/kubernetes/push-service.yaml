@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: push-service
+  labels:
+    app: push-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: push-service
+  template:
+    metadata:
+      labels:
+        app: push-service
+    spec:
+      containers:
+      - name: push-service
+        image: ghcr.io/aduadrian/notification-system/push-service:latest
+        ports:
+        - containerPort: 3005
+          name: metrics
+        env:
+        - name: METRICS_PORT
+          value: "3005"
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: notification-config
+              key: kafka_brokers
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/secrets/firebase-credentials.json"
+        - name: JAEGER_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: notification-config
+              key: jaeger_endpoint
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 3005
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3005
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /health/startup
+            port: 3005
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+          successThreshold: 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: push-service
+spec:
+  selector:
+    app: push-service
+  ports:
+  - port: 3005
+    targetPort: 3005
+    name: metrics
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: push-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: push-service
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

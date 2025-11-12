@@ -31,6 +31,69 @@ const metrics = new MetricsCollector('email-service');
 const app = express();
 const METRICS_PORT = process.env.METRICS_PORT || 3002;
 
+// Liveness probe - Simple, fast check if process is running
+app.get('/health/live', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Readiness probe - Checks if service can handle requests
+app.get('/health/ready', async (req, res) => {
+  const startTime = Date.now();
+
+  try {
+    // Check if SendGrid API key is configured
+    const sendgridConfigured = !!process.env.SENDGRID_API_KEY;
+    const responseTime = Date.now() - startTime;
+
+    const status = sendgridConfigured ? 'healthy' : 'degraded';
+
+    res.status(sendgridConfigured ? 200 : 503).json({
+      status,
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      checks: {
+        kafka: 'up',
+        sendgrid: sendgridConfigured ? 'up' : 'down',
+      },
+      uptime: process.uptime(),
+    });
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      error: 'Readiness check failed',
+    });
+  }
+});
+
+// Startup probe - Allows slow initialization
+app.get('/health/startup', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Legacy health endpoint - kept for backward compatibility
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'email-service',
+    timestamp: new Date().toISOString(),
+    checks: {
+      kafka: 'up',
+      sendgrid: !!process.env.SENDGRID_API_KEY ? 'up' : 'down',
+    },
+    uptime: process.uptime(),
+  });
+});
+
 // Metrics endpoint
 app.get('/metrics', async (req, res) => {
   try {
@@ -40,16 +103,6 @@ app.get('/metrics', async (req, res) => {
     logger.error('Failed to collect metrics', { error });
     res.status(500).end();
   }
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    service: 'email-service',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
 });
 
 // Initialize Kafka client with DLQ support

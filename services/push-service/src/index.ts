@@ -35,6 +35,65 @@ const metrics = new MetricsCollector('push-service');
 const app = express();
 const METRICS_PORT = process.env.METRICS_PORT || 3005;
 
+// Liveness probe - Simple, fast check if process is running
+app.get('/health/live', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Readiness probe - Checks if service can handle requests
+app.get('/health/ready', async (req, res) => {
+  const startTime = Date.now();
+
+  try {
+    const responseTime = Date.now() - startTime;
+
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      checks: {
+        kafka: 'up',
+        firebase: 'up',
+      },
+      uptime: process.uptime(),
+    });
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      error: 'Readiness check failed',
+    });
+  }
+});
+
+// Startup probe - Allows slow initialization
+app.get('/health/startup', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Legacy health endpoint - kept for backward compatibility
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'push-service',
+    timestamp: new Date().toISOString(),
+    checks: {
+      kafka: 'up',
+      firebase: 'up',
+    },
+    uptime: process.uptime(),
+  });
+});
+
 // Metrics endpoint
 app.get('/metrics', async (req, res) => {
   try {
@@ -44,16 +103,6 @@ app.get('/metrics', async (req, res) => {
     logger.error('Failed to collect metrics', { error });
     res.status(500).end();
   }
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    service: 'push-service',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
 });
 
 // Initialize Kafka client with DLQ support

@@ -44,11 +44,18 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 );
 
 -- Indexes for performance
+-- Single column indexes for common queries
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_status ON notifications(status);
 CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
 CREATE INDEX idx_delivery_logs_notification_id ON delivery_logs(notification_id);
 CREATE INDEX idx_delivery_logs_channel ON delivery_logs(channel);
+CREATE INDEX idx_delivery_logs_status ON delivery_logs(status);
+CREATE INDEX idx_user_preferences_user_id ON user_preferences(user_id);
+
+-- Composite index for optimized user notification queries with status filtering
+-- This index supports queries like: WHERE user_id = X AND status = Y ORDER BY created_at DESC
+CREATE INDEX idx_notifications_user_status ON notifications(user_id, status, created_at DESC);
 
 -- Audit log table
 CREATE TABLE IF NOT EXISTS audit_log (

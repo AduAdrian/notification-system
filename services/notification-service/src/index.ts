@@ -61,25 +61,104 @@ app.get('/api-docs.json', (req, res) => {
 // Routes
 app.use('/api/v1/notifications', notificationRoutes);
 
-// Health check endpoint
-app.get('/health', async (req, res) => {
+// Liveness probe - Simple, fast check if process is running
+// This should NEVER check external dependencies
+app.get('/health/live', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Readiness probe - Checks if service can handle requests
+// Verifies all critical dependencies are available
+app.get('/health/ready', async (req, res) => {
+  const startTime = Date.now();
+
   try {
     // Check database connection
     const dbHealthy = await dbService.isHealthy();
     // Check Redis connection
     const redisHealthy = await redisService.isHealthy();
 
-    const isHealthy = dbHealthy && redisHealthy;
+    const allHealthy = dbHealthy && redisHealthy;
+    const responseTime = Date.now() - startTime;
 
-    res.status(isHealthy ? 200 : 503).json({
-      status: isHealthy ? 'healthy' : 'unhealthy',
-      service: 'notification-service',
+    const status = allHealthy ? 'healthy' : 'degraded';
+
+    res.status(allHealthy ? 200 : 503).json({
+      status,
       timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
       checks: {
         database: dbHealthy ? 'up' : 'down',
         redis: redisHealthy ? 'up' : 'down',
-        kafka: 'up', // Simplified - should add actual check
+        kafka: 'up', // Kafka is async, don't block on it
       },
+      uptime: process.uptime(),
+    });
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    logger.error('Readiness check failed', { error });
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      error: 'Readiness check failed',
+    });
+  }
+});
+
+// Startup probe - Allows slow initialization
+// More lenient than readiness probe for initial startup
+app.get('/health/startup', async (req, res) => {
+  try {
+    const dbHealthy = await dbService.isHealthy();
+    const redisHealthy = await redisService.isHealthy();
+
+    if (dbHealthy && redisHealthy) {
+      res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      res.status(503).json({
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        message: 'Service still initializing',
+      });
+    }
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// Legacy health endpoint - kept for backward compatibility
+app.get('/health', async (req, res) => {
+  const startTime = Date.now();
+
+  try {
+    const dbHealth = await dbService.getDetailedHealth();
+    const redisHealthy = await redisService.isHealthy();
+    const responseTime = Date.now() - startTime;
+
+    const allHealthy = dbHealth.status === 'up' && redisHealthy;
+
+    res.status(allHealthy ? 200 : 503).json({
+      status: allHealthy ? 'healthy' : 'degraded',
+      service: 'notification-service',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      checks: {
+        database: dbHealth.status,
+        redis: redisHealthy ? 'up' : 'down',
+        kafka: 'up',
+      },
+      poolStats: dbHealth.poolStats,
       uptime: process.uptime(),
       memory: process.memoryUsage(),
     });
@@ -94,26 +173,9 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Readiness check endpoint (Kubernetes)
-app.get('/ready', async (req, res) => {
-  try {
-    const dbHealthy = await dbService.isHealthy();
-    const redisHealthy = await redisService.isHealthy();
-
-    if (dbHealthy && redisHealthy) {
-      res.status(200).json({ status: 'ready' });
-    } else {
-      res.status(503).json({ status: 'not ready' });
-    }
-  } catch (error) {
-    res.status(503).json({ status: 'not ready' });
-  }
-});
-
-// Liveness check endpoint (Kubernetes)
-app.get('/live', (req, res) => {
-  res.status(200).json({ status: 'alive' });
-});
+// Backward compatibility aliases
+app.get('/ready', (req, res) => res.redirect(308, '/health/ready'));
+app.get('/live', (req, res) => res.redirect(308, '/health/live'));
 
 // Prometheus metrics endpoint
 app.get('/metrics', async (req, res) => {

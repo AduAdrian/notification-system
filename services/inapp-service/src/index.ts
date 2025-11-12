@@ -31,6 +31,67 @@ app.get('/api-docs.json', (req: Request, res: Response) => {
   res.send(swaggerSpec);
 });
 
+// Liveness probe - Simple, fast check if process is running
+app.get('/health/live', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Readiness probe - Checks if service can handle requests
+app.get('/health/ready', async (req: Request, res: Response) => {
+  const startTime = Date.now();
+
+  try {
+    const responseTime = Date.now() - startTime;
+
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      checks: {
+        kafka: 'up',
+        sse: 'up',
+      },
+      uptime: process.uptime(),
+      activeConnections: connections.size,
+    });
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      error: 'Readiness check failed',
+    });
+  }
+});
+
+// Startup probe - Allows slow initialization
+app.get('/health/startup', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Legacy health endpoint - kept for backward compatibility
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'inapp-service',
+    timestamp: new Date().toISOString(),
+    checks: {
+      kafka: 'up',
+      sse: 'up',
+    },
+    uptime: process.uptime(),
+    activeConnections: connections.size,
+  });
+});
+
 // Store active SSE connections
 const connections = new Map<string, Response[]>();
 

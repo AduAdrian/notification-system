@@ -1,61 +1,38 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: notification-service
+  name: email-service
   labels:
-    app: notification-service
+    app: email-service
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
-      app: notification-service
+      app: email-service
   template:
     metadata:
       labels:
-        app: notification-service
+        app: email-service
     spec:
       containers:
-      - name: notification-service
-        image: ghcr.io/aduadrian/notification-system/notification-service:latest
+      - name: email-service
+        image: ghcr.io/aduadrian/notification-system/email-service:latest
         ports:
-        - containerPort: 3000
+        - containerPort: 3002
+          name: metrics
         env:
-        - name: PORT
-          value: "3000"
-        - name: DB_HOST
-          valueFrom:
-            configMapKeyRef:
-              name: notification-config
-              key: db_host
-        - name: DB_PORT
-          value: "5432"
-        - name: DB_NAME
-          value: "notifications"
-        - name: DB_USER
-          valueFrom:
-            secretKeyRef:
-              name: notification-secrets
-              key: db_user
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: notification-secrets
-              key: db_password
-        - name: REDIS_URL
-          valueFrom:
-            configMapKeyRef:
-              name: notification-config
-              key: redis_url
+        - name: METRICS_PORT
+          value: "3002"
         - name: KAFKA_BROKERS
           valueFrom:
             configMapKeyRef:
               name: notification-config
               key: kafka_brokers
-        - name: JWT_SECRET
+        - name: SENDGRID_API_KEY
           valueFrom:
             secretKeyRef:
               name: notification-secrets
-              key: jwt_secret
+              key: sendgrid_api_key
         - name: JAEGER_ENDPOINT
           valueFrom:
             configMapKeyRef:
@@ -65,39 +42,36 @@ spec:
           value: "production"
         resources:
           requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
             memory: "256Mi"
             cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
         # Liveness probe - checks if container is alive
-        # Failure results in container restart
         livenessProbe:
           httpGet:
             path: /health/live
-            port: 3000
+            port: 3002
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
           successThreshold: 1
         # Readiness probe - checks if container can accept traffic
-        # Failure removes pod from service endpoints
         readinessProbe:
           httpGet:
             path: /health/ready
-            port: 3000
+            port: 3002
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 2
           successThreshold: 1
-        # Startup probe - allows for slow starting containers
-        # Disables liveness/readiness checks until successful
+        # Startup probe - allows for slow Kafka connection
         startupProbe:
           httpGet:
             path: /health/startup
-            port: 3000
+            port: 3002
           initialDelaySeconds: 0
           periodSeconds: 5
           timeoutSeconds: 3
@@ -107,26 +81,27 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: notification-service
+  name: email-service
 spec:
   selector:
-    app: notification-service
+    app: email-service
   ports:
-  - port: 80
-    targetPort: 3000
-  type: LoadBalancer
+  - port: 3002
+    targetPort: 3002
+    name: metrics
+  type: ClusterIP
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: notification-service-hpa
+  name: email-service-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: notification-service
-  minReplicas: 3
-  maxReplicas: 10
+    name: email-service
+  minReplicas: 2
+  maxReplicas: 8
   metrics:
   - type: Resource
     resource:

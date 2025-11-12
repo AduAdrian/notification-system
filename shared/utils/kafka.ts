@@ -13,10 +13,18 @@ export class KafkaClient {
     this.kafka = new Kafka({
       clientId,
       brokers,
+      // 2025 best practices: optimized connection and retry settings
+      connectionTimeout: 3000, // 3s connection timeout
+      requestTimeout: 30000, // 30s request timeout
       retry: {
-        initialRetryTime: 300,
-        retries: 10,
+        initialRetryTime: 300, // Start with 300ms
+        retries: 10, // Max 10 retries
+        maxRetryTime: 30000, // Max backoff 30s
+        multiplier: 2, // Exponential backoff multiplier
+        factor: 0.2, // Randomization factor
       },
+      // Consumer group session settings
+      // These are applied when creating consumers
     });
   }
 
@@ -54,7 +62,14 @@ export class KafkaClient {
     topics: string[],
     handler: (event: KafkaEvent) => Promise<void>
   ): Promise<void> {
-    const consumer = this.kafka.consumer({ groupId });
+    const consumer = this.kafka.consumer({
+      groupId,
+      // 2025 best practices: consumer session and heartbeat configuration
+      sessionTimeout: 30000, // 30s session timeout
+      heartbeatInterval: 3000, // 3s heartbeat interval (must be < sessionTimeout/3)
+      maxBytes: 10485760, // 10MB max fetch size
+      maxWaitTimeInMs: 5000, // 5s max wait time for fetch
+    });
     await consumer.connect();
     await consumer.subscribe({ topics, fromBeginning: false });
 
