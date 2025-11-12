@@ -1,5 +1,5 @@
 // IMPORTANT: Initialize tracing FIRST, before any other imports
-import { initTracing } from '@notification-system/utils';
+import { initTracing , correlationMiddleware } from '@notification-system/utils';
 initTracing({
   serviceName: 'inapp-service',
   environment: process.env.NODE_ENV || 'development',
@@ -9,7 +9,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
-import { createLogger, KafkaClientWithDLQ } from '@notification-system/utils';
+import { createLogger, KafkaClientWithDLQ , correlationMiddleware } from '@notification-system/utils';
 import { InAppPayload, NotificationChannel } from '@notification-system/types';
 import { swaggerSpec, swaggerUiOptions } from './config/swagger.config';
 
@@ -17,6 +17,8 @@ dotenv.config();
 
 const logger = createLogger('inapp-service');
 const app = express();
+app.use(express.json());
+app.use(correlationMiddleware);
 const PORT = process.env.PORT || 3004;
 
 app.use(cors());

@@ -1,6 +1,7 @@
 import { Kafka, Producer, Consumer, EachMessagePayload } from 'kafkajs';
 import { KafkaEvent } from '@notification-system/types';
 import { createLogger } from './logger';
+import { getCorrelationHeaders, runWithCorrelationContext, createKafkaCorrelationContext } from './correlation';
 
 const logger = createLogger('kafka-utils');
 
@@ -40,6 +41,10 @@ export class KafkaClient {
   async publishEvent(topic: string, event: KafkaEvent): Promise<void> {
     try {
       const producer = await this.getProducer();
+      
+      // Get correlation headers from current context
+      const correlationHeaders = getCorrelationHeaders();
+      
       await producer.send({
         topic,
         messages: [
@@ -47,10 +52,18 @@ export class KafkaClient {
             key: event.data.notificationId || (event.data as any).id,
             value: JSON.stringify(event),
             timestamp: event.timestamp.getTime().toString(),
+            // Attach correlation headers to Kafka message
+            headers: {
+              ...correlationHeaders,
+              'x-event-type': event.type,
+            },
           },
         ],
       });
-      logger.info(`Event published to ${topic}`, { eventType: event.type });
+      logger.info(`Event published to ${topic}`, { 
+        eventType: event.type,
+        correlationId: correlationHeaders['X-Correlation-ID'],
+      });
     } catch (error) {
       logger.error('Failed to publish event', { topic, error });
       throw error;
@@ -77,11 +90,19 @@ export class KafkaClient {
       eachMessage: async ({ topic, partition, message }: EachMessagePayload) => {
         try {
           const event: KafkaEvent = JSON.parse(message.value?.toString() || '{}');
-          logger.info(`Received event from ${topic}`, {
-            eventType: event.type,
-            partition,
+          
+          // Extract correlation context from Kafka message headers
+          const correlationContext = createKafkaCorrelationContext(message.headers || {});
+          
+          // Run handler within correlation context for proper log correlation
+          await runWithCorrelationContext(correlationContext, async () => {
+            logger.info(`Received event from ${topic}`, {
+              eventType: event.type,
+              partition,
+              correlationId: correlationContext.correlationId,
+            });
+            await handler(event);
           });
-          await handler(event);
         } catch (error) {
           logger.error('Failed to process message', { topic, error });
         }

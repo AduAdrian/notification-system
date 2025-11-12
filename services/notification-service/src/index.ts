@@ -10,7 +10,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
-import { createLogger, KafkaClient, MetricsCollector, metricsMiddleware } from '@notification-system/utils';
+import { createLogger, KafkaClient, MetricsCollector, metricsMiddleware, correlationMiddleware } from '@notification-system/utils';
 import { notificationRoutes } from './routes/notification.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { DatabaseService } from './services/database.service';
@@ -32,6 +32,10 @@ app.use(helmet({
 }));
 app.use(cors());
 app.use(express.json());
+
+// CORRELATION ID MIDDLEWARE - Must be before metricsMiddleware to capture correlation context
+app.use(correlationMiddleware);
+
 app.use(metricsMiddleware(metrics));
 
 // Initialize services
@@ -99,7 +103,6 @@ app.get('/health/ready', async (req, res) => {
       uptime: process.uptime(),
     });
   } catch (error) {
-    const responseTime = Date.now() - startTime;
     logger.error('Readiness check failed', { error });
     res.status(503).json({
       status: 'unhealthy',

@@ -1,5 +1,5 @@
 // IMPORTANT: Initialize tracing FIRST, before any other imports
-import { initTracing } from '@notification-system/utils';
+import { initTracing , correlationMiddleware } from '@notification-system/utils';
 initTracing({
   serviceName: 'push-service',
   environment: process.env.NODE_ENV || 'development',
@@ -16,7 +16,7 @@ import {
   createHttpCircuitBreaker,
   withSpan,
   addSpanEvent,
-} from '@notification-system/utils';
+, correlationMiddleware } from '@notification-system/utils';
 import { PushPayload, NotificationChannel } from '@notification-system/types';
 
 dotenv.config();
@@ -33,6 +33,8 @@ const metrics = new MetricsCollector('push-service');
 
 // Setup HTTP server for metrics endpoint
 const app = express();
+app.use(express.json());
+app.use(correlationMiddleware);
 const METRICS_PORT = process.env.METRICS_PORT || 3005;
 
 // Liveness probe - Simple, fast check if process is running

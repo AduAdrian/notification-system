@@ -7,7 +7,7 @@ initTracing({
 
 import dotenv from 'dotenv';
 import express from 'express';
-import { createLogger, KafkaClient, MetricsCollector } from '@notification-system/utils';
+import { createLogger, KafkaClient, MetricsCollector, correlationMiddleware } from '@notification-system/utils';
 import { NotificationChannel } from '@notification-system/types';
 import { ChannelOrchestrator } from './orchestrator';
 
@@ -18,6 +18,8 @@ const metrics = new MetricsCollector('channel-orchestrator');
 
 // Setup HTTP server for health checks and metrics
 const app = express();
+app.use(express.json());
+app.use(correlationMiddleware);
 const METRICS_PORT = process.env.METRICS_PORT || 3001;
 
 let kafkaClient: KafkaClient;
