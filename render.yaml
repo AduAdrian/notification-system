@@ -1,0 +1,113 @@
+services:
+  # Notification Service - Main API
+  - type: web
+    name: notification-service
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd services/notification-service && npm install && npm run build
+    startCommand: cd services/notification-service && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: 5432
+      - key: DB_NAME
+        value: notifications
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: KAFKA_BROKERS
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+    healthCheckPath: /health
+
+  # Channel Orchestrator
+  - type: worker
+    name: channel-orchestrator
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd services/channel-orchestrator && npm install && npm run build
+    startCommand: cd services/channel-orchestrator && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: KAFKA_BROKERS
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+
+  # Email Service
+  - type: worker
+    name: email-service
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd services/email-service && npm install && npm run build
+    startCommand: cd services/email-service && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: KAFKA_BROKERS
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+
+  # SMS Service
+  - type: worker
+    name: sms-service
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd services/sms-service && npm install && npm run build
+    startCommand: cd services/sms-service && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: KAFKA_BROKERS
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+
+  # Push Service
+  - type: worker
+    name: push-service
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd services/push-service && npm install && npm run build
+    startCommand: cd services/push-service && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: KAFKA_BROKERS
+        sync: false
+
+  # In-App Service
+  - type: web
+    name: inapp-service
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd services/inapp-service && npm install && npm run build
+    startCommand: cd services/inapp-service && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3004
+      - key: KAFKA_BROKERS
+        sync: false
+      - key: REDIS_URL
+        sync: false
