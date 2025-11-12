@@ -135,7 +135,7 @@ export class ChannelOrchestrator {
       userId: notification.userId,
       title: notification.subject || 'Notification',
       message: notification.message,
-      actionUrl: notification.metadata?.actionUrl,
+      actionUrl: notification.metadata?.customData?.actionUrl,
     };
 
     await this.kafkaClient.publishEvent('channel.inapp.queued', {

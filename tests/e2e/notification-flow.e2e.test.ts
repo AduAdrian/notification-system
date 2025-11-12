@@ -83,12 +83,29 @@ describe('Notification System E2E Tests', () => {
       // Simulate orchestrator processing the event
       for (const channel of notification.channels) {
         const channelTopic = `channel.${channel}.queued`;
+        // Create appropriate payload based on channel
+        let payload: any;
+        switch (channel) {
+          case NotificationChannel.EMAIL:
+            payload = { to: 'test@example.com', from: 'noreply@test.com', subject: 'Test', html: '<p>Test</p>' };
+            break;
+          case NotificationChannel.SMS:
+            payload = { to: '+1234567890', from: '+1987654321', message: 'Test' };
+            break;
+          case NotificationChannel.PUSH:
+            payload = { token: 'device-token', title: 'Test', body: 'Test' };
+            break;
+          case NotificationChannel.IN_APP:
+            payload = { userId: notification.userId, title: 'Test', message: 'Test' };
+            break;
+        }
+
         await mockKafkaClient.publishEvent(channelTopic, {
           type: channelTopic as any,
           data: {
             notificationId: notification.id,
             channel,
-            payload: {}, // Channel-specific payload
+            payload,
           },
           timestamp: new Date(),
         });
@@ -181,7 +198,7 @@ describe('Notification System E2E Tests', () => {
       expect(mockKafkaClient.getEventsByTopic('delivery.failed')).toHaveLength(1);
 
       const failedEvent = mockKafkaClient.getLastEvent('delivery.failed');
-      expect(failedEvent?.data.error).toBe('Invalid phone number');
+      expect((failedEvent?.data as any).error).toBe('Invalid phone number');
     });
 
     it('should process high priority notifications', async () => {
@@ -380,7 +397,7 @@ describe('Notification System E2E Tests', () => {
 
       const failedEvents = mockKafkaClient.getEventsByTopic('delivery.failed');
       expect(failedEvents).toHaveLength(1);
-      expect(failedEvents[0].data.error).toContain('Kafka');
+      expect((failedEvents[0].data as any).error).toContain('Kafka');
     });
 
     it('should maintain data consistency across failures', async () => {

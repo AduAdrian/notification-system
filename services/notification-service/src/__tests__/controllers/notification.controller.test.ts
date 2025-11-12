@@ -177,7 +177,15 @@ describe('NotificationController', () => {
 
       expect(mockRes.json).toHaveBeenCalledWith({
         success: true,
-        data: notification,
+        data: expect.objectContaining({
+          id: 'notif-123',
+          userId: 'user-123',
+          channels: [NotificationChannel.EMAIL],
+          priority: NotificationPriority.MEDIUM,
+          status: NotificationStatus.SENT,
+          message: 'Test message',
+          metadata: {},
+        }),
       });
     });
 

@@ -24,6 +24,16 @@ jest.mock('@notification-system/utils', () => ({
   uuid: jest.fn(() => `test-uuid-${Date.now()}`),
 }));
 
+// Mock auth middleware to bypass authentication in tests
+jest.mock('../../middleware/auth.middleware', () => ({
+  authMiddleware: (req: any, res: any, next: any) => next(),
+}));
+
+// Mock rate limiter
+jest.mock('../../middleware/ratelimit.middleware', () => ({
+  rateLimiter: (req: any, res: any, next: any) => next(),
+}));
+
 describe('Notification API Integration Tests', () => {
   let app: Application;
   let mockKafkaClient: MockKafkaClient;

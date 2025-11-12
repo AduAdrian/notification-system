@@ -12,9 +12,11 @@ module.exports = {
     '!**/*.d.ts',
     '!**/node_modules/**',
     '!**/dist/**',
+    '!**/__tests__/**',
+    '!**/tests/**',
   ],
   coverageDirectory: '<rootDir>/coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
+  coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
   coverageThreshold: {
     global: {
       branches: 70,
@@ -30,4 +32,8 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testTimeout: 10000,
   verbose: true,
+  maxWorkers: '50%',
+  clearMocks: true,
+  resetMocks: true,
+  restoreMocks: true,
 };

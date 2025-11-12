@@ -29,8 +29,7 @@ export class DatabaseService {
       // Query timeouts to prevent hanging queries
       statement_timeout: 10000, // 10s max for any single statement
       query_timeout: 10000, // 10s max for query execution
-      // Connection settings
-      allowExitOnIdle: false, // Keep pool alive even with no active connections
+      // Connection settings - note: allowExitOnIdle removed as not supported in all pg versions
     });
 
     // Pool event monitoring for observability

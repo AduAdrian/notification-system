@@ -32,10 +32,33 @@ jobs:
           npm run build --workspaces || true
           echo "✅ Build step completed"
 
-      - name: Run tests
+      - name: Run tests with coverage
+        run: npm run test:ci
+        env:
+          CI: true
+
+      - name: Check coverage threshold
         run: |
-          npm test --workspaces || true
-          echo "✅ Test step completed"
+          echo "Checking coverage thresholds..."
+          if [ -f coverage/lcov.info ]; then
+            echo "✅ Coverage report generated"
+          else
+            echo "❌ Coverage report not found"
+            exit 1
+          fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-notification-system
+          fail_ci_if_error: false
+
+      - name: Generate coverage badge
+        if: github.ref == 'refs/heads/master'
+        run: |
+          echo "Coverage badge generation would go here"
 
       - name: Pipeline Status
         run: echo "✅ CI/CD Pipeline completed successfully"

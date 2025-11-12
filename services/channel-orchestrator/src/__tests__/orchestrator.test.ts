@@ -124,7 +124,8 @@ describe('ChannelOrchestrator', () => {
       const pushEvents = mockKafkaClient.getEventsByTopic('channel.push.queued');
       expect(pushEvents).toHaveLength(1);
       expect(pushEvents[0].type).toBe('channel.push.queued');
-      expect(pushEvents[0].data.payload).toMatchObject({
+      const pushPayload = (pushEvents[0].data as any).payload;
+      expect(pushPayload).toMatchObject({
         title: 'Push Notification',
         body: 'Test push message',
         data: { key: 'value' },
@@ -142,7 +143,7 @@ describe('ChannelOrchestrator', () => {
           status: NotificationStatus.PENDING,
           subject: 'In-App Notification',
           message: 'Test in-app message',
-          metadata: { actionUrl: 'https://example.com' },
+          metadata: { customData: { actionUrl: 'https://example.com' } },
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -155,7 +156,8 @@ describe('ChannelOrchestrator', () => {
       const inAppEvents = mockKafkaClient.getEventsByTopic('channel.inapp.queued');
       expect(inAppEvents).toHaveLength(1);
       expect(inAppEvents[0].type).toBe('channel.inapp.queued');
-      expect(inAppEvents[0].data.payload).toMatchObject({
+      const inAppPayload = (inAppEvents[0].data as any).payload;
+      expect(inAppPayload).toMatchObject({
         userId: 'user-123',
         title: 'In-App Notification',
         message: 'Test in-app message',
@@ -252,7 +254,8 @@ describe('ChannelOrchestrator', () => {
       await mockKafkaClient.simulateEvent('notification.created', event);
 
       const emailEvents = mockKafkaClient.getEventsByTopic('channel.email.queued');
-      expect(emailEvents[0].data.payload.subject).toBe('New Notification');
+      const emailPayload = (emailEvents[0].data as any).payload;
+      expect(emailPayload.subject).toBe('New Notification');
     });
 
     it('should include default title for push when not provided', async () => {
@@ -276,7 +279,8 @@ describe('ChannelOrchestrator', () => {
       await mockKafkaClient.simulateEvent('notification.created', event);
 
       const pushEvents = mockKafkaClient.getEventsByTopic('channel.push.queued');
-      expect(pushEvents[0].data.payload.title).toBe('Notification');
+      const pushPayload2 = (pushEvents[0].data as any).payload;
+      expect(pushPayload2.title).toBe('Notification');
     });
   });
 });
