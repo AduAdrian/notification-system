@@ -215,7 +215,7 @@ export class TokenService {
   async revokeRefreshToken(tokenId: string): Promise<void> {
     try {
       await this.redisService.client?.del(`refresh_token:${tokenId}`);
-      await this.redisService.client?.setex(`revoked_token:${tokenId}`, 7 * 24 * 60 * 60, '1');
+      await this.redisService.client?.setEx(`revoked_token:${tokenId}`, 7 * 24 * 60 * 60, '1');
       logger.info('Refresh token revoked', { tokenId });
     } catch (error) {
       logger.error('Failed to revoke refresh token', { error, tokenId });
@@ -266,7 +266,7 @@ export class TokenService {
       const ttl = decoded.exp - Math.floor(Date.now() / 1000);
 
       if (ttl > 0) {
-        await this.redisService.client?.setex(`blacklist:${decoded.jti}`, ttl, '1');
+        await this.redisService.client?.setEx(`blacklist:${decoded.jti}`, ttl, '1');
         logger.info('Access token blacklisted', { tokenId: decoded.jti, ttl });
       }
     } catch (error) {
@@ -280,7 +280,7 @@ export class TokenService {
    */
   private async storeRefreshToken(tokenId: string, data: RefreshTokenData): Promise<void> {
     const ttl = 7 * 24 * 60 * 60; // 7 days in seconds
-    await this.redisService.client?.setex(
+    await this.redisService.client?.setEx(
       `refresh_token:${tokenId}`,
       ttl,
       JSON.stringify(data)
@@ -316,7 +316,7 @@ export class TokenService {
         const tokenData = JSON.parse(data) as RefreshTokenData;
         if (tokenData.family === familyId) {
           await this.redisService.client?.del(key);
-          await this.redisService.client?.setex(
+          await this.redisService.client?.setEx(
             `revoked_token:${tokenData.tokenId}`,
             7 * 24 * 60 * 60,
             '1'

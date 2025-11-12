@@ -5,10 +5,10 @@ import { createLogger } from '@notification-system/utils';
 const logger = createLogger('database-service');
 
 export class DatabaseService {
-  private pool: Pool;
+  private _pool: Pool;
 
   constructor() {
-    this.pool = new Pool({
+    this._pool = new Pool({
       host: process.env.DB_HOST || 'localhost',
       port: Number(process.env.DB_PORT) || 5432,
       database: process.env.DB_NAME || 'notifications',
@@ -20,14 +20,28 @@ export class DatabaseService {
     });
   }
 
+  get pool(): Pool {
+    return this._pool;
+  }
+
   async connect(): Promise<void> {
     try {
-      const client = await this.pool.connect();
+      const client = await this._pool.connect();
       client.release();
       logger.info('Database connected successfully');
     } catch (error) {
       logger.error('Failed to connect to database', { error });
       throw error;
+    }
+  }
+
+  async isHealthy(): Promise<boolean> {
+    try {
+      const client = await this._pool.connect();
+      client.release();
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -52,7 +66,7 @@ export class DatabaseService {
     ];
 
     try {
-      await this.pool.query(query, values);
+      await this._pool.query(query, values);
     } catch (error) {
       logger.error('Failed to create notification', { error, notificationId: notification.id });
       throw error;
@@ -63,7 +77,7 @@ export class DatabaseService {
     const query = 'SELECT * FROM notifications WHERE id = $1';
 
     try {
-      const result = await this.pool.query(query, [id]);
+      const result = await this._pool.query(query, [id]);
       if (result.rows.length === 0) {
         return null;
       }
@@ -96,7 +110,7 @@ export class DatabaseService {
     `;
 
     try {
-      const result = await this.pool.query(query, [userId, limit, offset]);
+      const result = await this._pool.query(query, [userId, limit, offset]);
       return result.rows.map(row => ({
         id: row.id,
         userId: row.user_id,
@@ -119,7 +133,7 @@ export class DatabaseService {
     const query = 'UPDATE notifications SET status = $1, updated_at = $2 WHERE id = $3';
 
     try {
-      await this.pool.query(query, [status, new Date(), id]);
+      await this._pool.query(query, [status, new Date(), id]);
     } catch (error) {
       logger.error('Failed to update notification status', { error, id, status });
       throw error;
@@ -127,7 +141,7 @@ export class DatabaseService {
   }
 
   async disconnect(): Promise<void> {
-    await this.pool.end();
+    await this._pool.end();
     logger.info('Database disconnected');
   }
 }

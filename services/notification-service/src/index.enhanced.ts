@@ -317,9 +317,8 @@ async function start() {
     await redisService.connect();
     logger.info('Redis connected');
 
-    // Connect to Kafka
-    await kafkaClient.connect();
-    logger.info('Kafka connected');
+    // Kafka will connect when first message is sent/received
+    logger.info('Kafka client initialized');
 
     // Start HTTP server
     app.listen(PORT, () => {

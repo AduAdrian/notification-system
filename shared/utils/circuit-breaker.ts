@@ -1,6 +1,6 @@
 import CircuitBreaker from 'opossum';
-import { createLogger } from './logger';
-import { MetricsCollector } from './metrics';
+import { createLogger } from './src/logger';
+import { MetricsCollector } from './src/metrics';
 
 const logger = createLogger('circuit-breaker');
 
@@ -159,7 +159,7 @@ export function createCircuitBreaker<T extends (...args: any[]) => Promise<any>>
     }
   });
 
-  breaker.on('success', (result, latency) => {
+  breaker.on('success', (result: any, latency: number) => {
     logger.debug(`Circuit breaker success`, { name, latency });
     if (metrics) {
       metrics.recordCircuitBreakerCall(name, 'success', latency);

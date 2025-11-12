@@ -105,12 +105,6 @@ export const helmetOptions: HelmetOptions = {
   // DNS Prefetch Control - Controls browser DNS prefetching
   dnsPrefetchControl: { allow: false },
 
-  // Expect-CT - Certificate Transparency enforcement (deprecated but still useful)
-  expectCt: {
-    maxAge: 86400,
-    enforce: true,
-  },
-
   // Frameguard - Prevents clickjacking attacks
   frameguard: { action: 'deny' },
 
