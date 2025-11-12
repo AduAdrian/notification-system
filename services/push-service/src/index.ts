@@ -1,6 +1,22 @@
+// IMPORTANT: Initialize tracing FIRST, before any other imports
+import { initTracing } from '@notification-system/utils';
+initTracing({
+  serviceName: 'push-service',
+  environment: process.env.NODE_ENV || 'development',
+});
+
 import dotenv from 'dotenv';
+import express from 'express';
 import admin from 'firebase-admin';
-import { createLogger, KafkaClient } from '@notification-system/utils';
+import {
+  createLogger,
+  KafkaClientWithDLQ,
+  MetricsCollector,
+  createTimer,
+  createHttpCircuitBreaker,
+  withSpan,
+  addSpanEvent,
+} from '@notification-system/utils';
 import { PushPayload, NotificationChannel } from '@notification-system/types';
 
 dotenv.config();
@@ -12,73 +28,171 @@ admin.initializeApp({
   credential: admin.credential.applicationDefault(),
 });
 
-const kafkaClient = new KafkaClient(
+// Initialize metrics
+const metrics = new MetricsCollector('push-service');
+
+// Setup HTTP server for metrics endpoint
+const app = express();
+const METRICS_PORT = process.env.METRICS_PORT || 3005;
+
+// Metrics endpoint
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', metrics.getRegistry().contentType);
+    res.end(await metrics.getMetrics());
+  } catch (error) {
+    logger.error('Failed to collect metrics', { error });
+    res.status(500).end();
+  }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    service: 'push-service',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Initialize Kafka client with DLQ support
+const kafkaClient = new KafkaClientWithDLQ(
   (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
-  'push-service'
+  'push-service',
+  {
+    enabled: true,
+    maxRetries: 3,
+    retryDelayMs: 1000,
+    dlqTopicSuffix: '.dlq',
+    metrics,
+  }
+);
+
+// Create circuit breaker for Firebase Cloud Messaging API
+const sendPushWithCircuitBreaker = createHttpCircuitBreaker(
+  'firebase-messaging-api',
+  async (message: any) => {
+    return await admin.messaging().send(message);
+  },
+  metrics
 );
 
 async function handlePushQueue(event: any): Promise<void> {
-  const { data } = event;
-  const { notificationId, payload } = data;
-  const pushPayload = payload as PushPayload;
+  return withSpan('push-delivery', async () => {
+    const { data } = event;
+    const { notificationId, payload } = data;
+    const pushPayload = payload as PushPayload;
 
-  try {
-    logger.info('Sending push notification', {
-      notificationId,
-      token: pushPayload.token.substring(0, 10) + '...',
+    // Start timer for latency tracking
+    const endTimer = createTimer();
+
+    addSpanEvent('push-handler-start', {
+      'notification.id': notificationId,
+      'push.token': pushPayload.token.substring(0, 10) + '...',
     });
 
-    const message = await admin.messaging().send({
-      token: pushPayload.token,
-      notification: {
-        title: pushPayload.title,
-        body: pushPayload.body,
-      },
-      data: pushPayload.data,
-      apns: {
-        payload: {
-          aps: {
-            badge: pushPayload.badge,
-            sound: pushPayload.sound || 'default',
+    try {
+      logger.info('Sending push notification', {
+        notificationId,
+        token: pushPayload.token.substring(0, 10) + '...',
+      });
+
+      // Use circuit breaker to send push notification
+      const message = await sendPushWithCircuitBreaker({
+        token: pushPayload.token,
+        notification: {
+          title: pushPayload.title,
+          body: pushPayload.body,
+        },
+        data: pushPayload.data,
+        apns: {
+          payload: {
+            aps: {
+              badge: pushPayload.badge,
+              sound: pushPayload.sound || 'default',
+            },
           },
         },
-      },
-    });
+      });
 
-    await kafkaClient.publishEvent('push.sent', {
-      type: 'channel.push.sent',
-      data: {
+      // Track successful delivery
+      const duration = endTimer();
+      metrics.trackNotificationDelivery(
+        NotificationChannel.PUSH,
+        'success',
+        'firebase',
+        duration
+      );
+
+      addSpanEvent('push-sent-success', {
+        'notification.id': notificationId,
+        'message.id': message,
+        'duration.seconds': duration.toString(),
+      });
+
+      await kafkaClient.publishEvent('push.sent', {
+        type: 'channel.push.sent',
+        data: {
+          notificationId,
+          channel: NotificationChannel.PUSH,
+          providerId: message,
+        },
+        timestamp: new Date(),
+      });
+
+      logger.info('Push notification sent successfully', {
         notificationId,
-        channel: NotificationChannel.PUSH,
-        providerId: message,
-      },
-      timestamp: new Date(),
-    });
+        messageId: message,
+        duration,
+      });
+    } catch (error: any) {
+      // Track failed delivery
+      const duration = endTimer();
+      metrics.trackNotificationDelivery(
+        NotificationChannel.PUSH,
+        'failed',
+        'firebase',
+        duration
+      );
 
-    logger.info('Push notification sent successfully', {
-      notificationId,
-      messageId: message,
-    });
-  } catch (error: any) {
-    logger.error('Failed to send push notification', {
-      notificationId,
-      error: error.message,
-    });
+      addSpanEvent('push-sent-failed', {
+        'notification.id': notificationId,
+        'error.message': error.message,
+        'error.type': error.name,
+      });
 
-    await kafkaClient.publishEvent('delivery.failed', {
-      type: 'delivery.failed',
-      data: {
+      logger.error('Failed to send push notification', {
         notificationId,
-        channel: NotificationChannel.PUSH,
         error: error.message,
-      },
-      timestamp: new Date(),
-    });
-  }
+      });
+
+      await kafkaClient.publishEvent('delivery.failed', {
+        type: 'delivery.failed',
+        data: {
+          notificationId,
+          channel: NotificationChannel.PUSH,
+          error: error.message,
+        },
+        timestamp: new Date(),
+      });
+
+      // Re-throw to trigger DLQ retry logic
+      throw error;
+    }
+  });
 }
 
 async function start() {
   try {
+    // Start metrics server
+    app.listen(METRICS_PORT, () => {
+      logger.info(`Push Service metrics available on port ${METRICS_PORT}`);
+    });
+
+    // Update Kafka connection status
+    metrics.updateKafkaConnectionStatus(true);
+
     await kafkaClient.subscribe(
       'push-service-group',
       ['channel.push.queued'],
@@ -88,12 +202,14 @@ async function start() {
     logger.info('Push Service started and listening for events');
   } catch (error) {
     logger.error('Failed to start Push Service', { error });
+    metrics.updateKafkaConnectionStatus(false);
     process.exit(1);
   }
 }
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down');
+  metrics.updateKafkaConnectionStatus(false);
   await kafkaClient.disconnect();
   process.exit(0);
 });

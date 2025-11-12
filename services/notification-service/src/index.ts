@@ -1,3 +1,10 @@
+// IMPORTANT: Initialize tracing FIRST, before any other imports
+import { initTracing } from '@notification-system/utils';
+initTracing({
+  serviceName: 'notification-service',
+  environment: process.env.NODE_ENV || 'development',
+});
+
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

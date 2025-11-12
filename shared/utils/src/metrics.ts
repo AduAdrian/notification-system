@@ -58,6 +58,11 @@ export class MetricsCollector {
   public notificationRetryCount: Counter;
   public notificationBatchSize: Histogram;
 
+  // Circuit Breaker Metrics
+  public circuitBreakerState: Gauge;
+  public circuitBreakerCallsTotal: Counter;
+  public circuitBreakerCallDuration: Histogram;
+
   constructor(serviceName: string, enableDefaultMetrics: boolean = true) {
     this.registry = new Registry();
     this.registry.setDefaultLabels({ service: serviceName });
@@ -236,6 +241,29 @@ export class MetricsCollector {
       buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
       registers: [this.registry],
     });
+
+    // Initialize Circuit Breaker Metrics
+    this.circuitBreakerState = new Gauge({
+      name: 'circuit_breaker_state',
+      help: 'Circuit breaker state (0 = closed, 1 = half-open, 2 = open)',
+      labelNames: ['name'],
+      registers: [this.registry],
+    });
+
+    this.circuitBreakerCallsTotal = new Counter({
+      name: 'circuit_breaker_calls_total',
+      help: 'Total number of circuit breaker calls',
+      labelNames: ['name', 'status'],
+      registers: [this.registry],
+    });
+
+    this.circuitBreakerCallDuration = new Histogram({
+      name: 'circuit_breaker_call_duration_seconds',
+      help: 'Circuit breaker call duration in seconds',
+      labelNames: ['name'],
+      buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 30],
+      registers: [this.registry],
+    });
   }
 
   /**
@@ -325,6 +353,28 @@ export class MetricsCollector {
    */
   public updateRedisConnectionStatus(connected: boolean): void {
     this.redisConnected.set(connected ? 1 : 0);
+  }
+
+  /**
+   * Record circuit breaker state change
+   */
+  public recordCircuitBreakerState(name: string, state: 'open' | 'half-open' | 'closed'): void {
+    const stateValue = state === 'closed' ? 0 : state === 'half-open' ? 1 : 2;
+    this.circuitBreakerState.set({ name }, stateValue);
+  }
+
+  /**
+   * Record circuit breaker call
+   */
+  public recordCircuitBreakerCall(
+    name: string,
+    status: 'success' | 'failure' | 'timeout' | 'rejected' | 'fallback',
+    durationSeconds?: number
+  ): void {
+    this.circuitBreakerCallsTotal.inc({ name, status });
+    if (durationSeconds !== undefined) {
+      this.circuitBreakerCallDuration.observe({ name }, durationSeconds);
+    }
   }
 }
 

@@ -1,7 +1,14 @@
+// IMPORTANT: Initialize tracing FIRST, before any other imports
+import { initTracing } from '@notification-system/utils';
+initTracing({
+  serviceName: 'inapp-service',
+  environment: process.env.NODE_ENV || 'development',
+});
+
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { createLogger, KafkaClient } from '@notification-system/utils';
+import { createLogger, KafkaClientWithDLQ } from '@notification-system/utils';
 import { InAppPayload, NotificationChannel } from '@notification-system/types';
 
 dotenv.config();
@@ -16,9 +23,16 @@ app.use(express.json());
 // Store active SSE connections
 const connections = new Map<string, Response[]>();
 
-const kafkaClient = new KafkaClient(
+// Initialize Kafka client with DLQ support
+const kafkaClient = new KafkaClientWithDLQ(
   (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
-  'inapp-service'
+  'inapp-service',
+  {
+    enabled: true,
+    maxRetries: 3,
+    retryDelayMs: 1000,
+    dlqTopicSuffix: '.dlq',
+  }
 );
 
 // SSE endpoint for clients to connect

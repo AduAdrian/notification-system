@@ -1,3 +1,10 @@
+// IMPORTANT: Initialize tracing FIRST, before any other imports
+import { initTracing } from '@notification-system/utils';
+initTracing({
+  serviceName: 'channel-orchestrator',
+  environment: process.env.NODE_ENV || 'development',
+});
+
 import dotenv from 'dotenv';
 import { createLogger, KafkaClient } from '@notification-system/utils';
 import { NotificationChannel } from '@notification-system/types';
