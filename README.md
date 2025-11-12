@@ -55,9 +55,58 @@ git worktree add ../notification-system-email feature/email-service
 git worktree add ../notification-system-sms feature/sms-service
 ```
 
-## Getting Started
+## 🚀 Quick Deploy (100% FREE)
 
-Coming soon...
+### One-Click Deploy to Render:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/AduAdrian/notification-system)
+
+**Or Manual:**
+
+1. **Sign up**: https://render.com (FREE)
+2. **Connect GitHub repo**: AduAdrian/notification-system
+3. **Deploy Blueprint**: Render auto-detects `render.yaml`
+4. **Setup Databases**: https://aiven.io (FREE PostgreSQL, Redis, Kafka)
+5. **Configure ENV vars** in Render Dashboard
+6. **Done!** Services live in 5-10 minutes
+
+📖 **Full Guide**: [docs/CLOUD_DEPLOYMENT.md](./docs/CLOUD_DEPLOYMENT.md)
+
+---
+
+## 🏠 Local Development
+
+**With Docker:**
+```bash
+docker-compose up -d
+```
+
+**Without Docker:**
+```bash
+npm install --workspaces
+npm run dev
+```
+
+📖 **Full Guide**: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+
+---
+
+## 📚 Documentation
+
+- **[API Documentation](./docs/API.md)** - Complete API reference
+- **[Cloud Deployment](./docs/CLOUD_DEPLOYMENT.md)** - Free cloud setup
+- **[Local Deployment](./docs/DEPLOYMENT.md)** - Docker & local setup
+- **[Architecture](./notification_system_architecture.md)** - System design
+- **[Worktree Workflow](./WORKTREE_WORKFLOW.md)** - Git workflow
+
+---
+
+## 🌐 Live Demo
+
+After deployment:
+- **API**: `https://notification-api.onrender.com`
+- **Health**: `https://notification-api.onrender.com/health`
+- **SSE**: `https://inapp-service.onrender.com/events/:userId`
 
 ## License
 
