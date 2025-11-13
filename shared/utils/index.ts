@@ -45,3 +45,39 @@ export {
   del,
   patch,
 } from './http-client';
+
+// Rate Limiting
+export {
+  TokenBucketLimiter,
+  FixedWindowLimiter,
+  SlidingWindowLimiter,
+  RateLimitResult,
+  TokenBucketConfig,
+} from './rate-limiter';
+
+export {
+  createRateLimitMiddleware,
+  RateLimitMiddlewares,
+  createMetricsAwareRateLimitMiddleware,
+  RateLimitConfig,
+} from './middleware/rate-limit.middleware';
+
+// Caching
+export {
+  CacheAsideStrategy,
+  WriteThroughStrategy,
+  WriteBehindStrategy,
+  CacheWarmingStrategy,
+  TTLManagementStrategy,
+  CacheOptions,
+  CacheStats,
+} from './cache-strategies';
+
+export {
+  CacheInvalidationManager,
+  TimedInvalidationScheduler,
+  InvalidationEvent,
+} from './cache-invalidation';
+
+// Cache & Rate Limit Metrics
+export * from './cache-metrics';

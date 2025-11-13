@@ -16,6 +16,8 @@ import { errorHandler } from './middleware/error.middleware';
 import { DatabaseService } from './services/database.service';
 import { RedisService } from './services/redis.service';
 import { swaggerSpec, swaggerUiOptions } from './config/swagger.config';
+import { CacheAsideStrategy, WriteThroughStrategy } from '@notification-system/utils/cache-strategies';
+import { CacheInvalidationManager } from '@notification-system/utils/cache-invalidation';
 
 dotenv.config();
 
@@ -25,6 +27,11 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize metrics collector
 const metrics = new MetricsCollector('notification-service');
+
+// Initialize cache strategies
+let cacheAside: CacheAsideStrategy;
+let writeThrough: WriteThroughStrategy;
+let cacheInvalidation: CacheInvalidationManager;
 
 // Middleware
 app.use(helmet({
@@ -47,11 +54,27 @@ const kafkaClient = new KafkaClient(
 const dbService = new DatabaseService();
 const redisService = new RedisService();
 
+// Initialize cache strategies after Redis connection
+async function initializeCacheStrategies() {
+  const redis = redisService.getClient();
+  cacheAside = new CacheAsideStrategy(redis, 'notif-cache');
+  writeThrough = new WriteThroughStrategy(redis, 'notif-write');
+  cacheInvalidation = new CacheInvalidationManager(redis, {
+    namespace: 'notif-cache',
+    kafka: kafkaClient,
+  });
+
+  logger.info('Cache strategies initialized');
+}
+
 // Make services available to routes
 app.locals.kafkaClient = kafkaClient;
 app.locals.dbService = dbService;
 app.locals.redisService = redisService;
 app.locals.metrics = metrics;
+app.locals.cacheAside = () => cacheAside;
+app.locals.writeThrough = () => writeThrough;
+app.locals.cacheInvalidation = () => cacheInvalidation;
 
 // API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
@@ -200,6 +223,12 @@ async function start() {
     await dbService.connect();
     await redisService.connect();
     logger.info('Database and Redis connected');
+
+    // Initialize cache strategies
+    await initializeCacheStrategies();
+
+    // Subscribe to cache invalidation events
+    await cacheInvalidation.subscribeToInvalidationEvents();
 
     app.listen(PORT, () => {
       logger.info(`Notification Service listening on port ${PORT}`);
